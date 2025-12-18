@@ -70,7 +70,6 @@ phangs_obs_cov_plot_kwargs_dict = {
 }
 
 
-
 # parameters for holistic overview plots
 
 
@@ -408,6 +407,209 @@ holistic_viewer2_param_dic = {
 
 
 }
+
+
+holistic_viewer3_param_dic = {
+
+    # image proportions:
+    'env_cutout_size': (10, 10),
+
+    # Figure and axis parameters
+    'fig_size': (45, 60),
+
+
+    # overview image
+    # general parameters
+    'overview_red_band': 'I',
+    'overview_green_band': 'V',
+    'overview_blue_band': 'B',
+    'overview_img_pixel_size': (500, 500),
+    # limits for the overview image
+    'overview_width': 0.34,
+    'overview_height': 0.34,
+    'overview_left_align': 0.035,
+    'overview_bottom_align': 0.69,
+    # parameters for RGB image
+    'overview_img_params': {
+        'color_r': '#FF4433',
+        'color_g': '#0FFF50',
+        'color_b': '#1F51FF',
+        'min_max_r': (0.3, 99.5),
+        'min_max_g': (0.3, 99.5),
+        'min_max_b': (0.3, 99.5),
+        'gamma_r': 17.5,
+        'gamma_g': 17.5,
+        'gamma_b': 17.5,
+        'gamma_corr_r': 17.5,
+        'gamma_corr_g': 17.5,
+        'gamma_corr_b': 17.5,
+        'combined_gamma': 17.5
+    },
+    'overview_scale_bar_length': 1,
+
+    # zoom in panels
+    # limits for the zoom in panels
+    'zoom_in_width': 0.15,
+    'zoom_in_height': 0.15,
+    'zoom_in_left_align': 0.42,
+    'zoom_in_bottom_align': 0.73,
+    'zoom_in_space_horizontal': -0.03,
+    'zoom_in_space_vertical': 0.005,
+    'zoom_in_scale_bar_length_1': 100,
+    'zoom_in_scale_bar_length_2': 5,
+
+    # hst broad band image
+    'hst_broad_band_red_band': 'I',
+    'hst_broad_band_green_band': 'V',
+    'hst_broad_band_blue_band': 'B',
+    # hst h-alpha image
+    'hst_ha_red_band': 'Ha',
+    'hst_ha_green_band': 'B',
+    'hst_ha_blue_band': 'NUV',
+    # Nircam1
+    'nircam1_red_band':  'F250M',
+    'nircam1_green_band': 'F200W',
+    'nircam1_blue_band': 'F150W',
+    # Nircam2
+    'nircam2_red_band': 'F200W',
+    'nircam2_green_band': 'F164N',
+    'nircam2_blue_band': 'F150W',
+    # Nircam3
+    'nircam3_red_band': 'F200W',
+    'nircam3_green_band': 'F187N',
+    'nircam3_blue_band': 'F150W',
+    # Nircam4
+    'nircam4_red_band': 'F250M',
+    'nircam4_green_band': 'F212N',
+    'nircam4_blue_band': 'F210M',
+    # Nircam5
+    'nircam5_red_band': 'F360M',
+    'nircam5_green_band': 'F335M',
+    'nircam5_blue_band': 'F300M',
+    # miri1
+    'miri1_red_band': 'F1130W',
+    'miri1_green_band': 'F1000W',
+    'miri1_blue_band': 'F770W',
+    # miri2
+    'miri2_red_band': 'F1500W',
+    'miri2_green_band': 'F1800W',
+    'miri2_blue_band': 'F2100W',
+
+
+    # zoom in panels
+    # limits for the zoom in panels
+    'x_ray_zoom_in_width': 0.20,
+    'x_ray_zoom_in_height': 0.20,
+    'x_ray_zoom_in_left_align': 0.035,
+    'x_ray_zoom_in_bottom_align': 0.44,
+    'x_ray_zoom_in_space_horizontal': -0.03,
+    'x_ray_zoom_in_space_vertical': 0.015,
+    'x_ray_zoom_in_scale_bar_length_1': 100,
+    'x_ray_zoom_in_scale_bar_length_2': 5,
+
+    '0p5to2_cbar_left_align': 0.035,
+    '0p5to2_cbar_bottom_align': 0.63,
+    '0p5to2_cbar_width': 0.13,
+    '0p5to2_cbar_height': 0.015,
+    # '0p5to2_norm': 'log',
+    '0p5to2_cmap': 'Blues',
+
+
+    '2to7_cbar_left_align': 0.25,
+    '2to7_cbar_bottom_align': 0.63,
+    '2to7_cbar_width': 0.13,
+    '2to7_cbar_height': 0.015,
+    # '2to7_norm': 'log',
+    '2to7_cmap': 'Reds',
+
+
+
+    # zoom in panels
+    # limits for the zoom in panels
+    'radio_zoom_in_width': 0.20,
+    'radio_zoom_in_height': 0.20,
+    'radio_zoom_in_left_align': 0.035,
+    'radio_zoom_in_bottom_align': 0.44,
+    'radio_zoom_in_space_horizontal': -0.03,
+    'radio_zoom_in_space_vertical': 0.015,
+    'radio_zoom_in_scale_bar_length_1': 100,
+    'radio_zoom_in_scale_bar_length_2': 5,
+
+    'tt0_cmap': 'Grays',
+
+
+    'alpha_cbar_left_align': 0.92,
+    'alpha_cbar_bottom_align': 0.49,
+    'alpha_cbar_width': 0.02,
+    'alpha_cbar_height': 0.10,
+    # 'alpha_norm': 'log',
+    'alpha_cmap': 'gnuplot_r',
+
+
+
+
+    'individual_band_list': [
+        'F275W', 'F425W', 'F555W', 'F658N', 'F814W',
+
+        'F150W', 'F164N', 'F187N', 'F200W', 'F210M', 'F212N', 'F250M',
+
+        'F300M', 'F335M', 'F360M',
+
+        'F770W', 'F1000W', 'F1130W', 'F2100W'
+                       ],
+
+
+
+
+    # limits for the stamps
+    'stamp_width': 0.1,
+    'stamp_height': 0.1,
+    'stamp_left_align': 0.035,
+    'stamp_bottom_align': -0.01,
+    'stamp_space_horizontal': 0.05,
+    'stamp_space_vertical': 0.005,
+
+    'rad_pro_width': 0.1,
+    'rad_pro_height': 0.045,
+    'rad_pro_left_align': 0.035,
+    'rad_pro_bottom_align': 0.095,
+    'rad_pro_space_horizontal': 0.105,
+    'rad_pro_space_vertical': 0.005,
+
+    'stamp_size': (2.5, 2.5),
+    'stamp_scale_bar_length_1': 1,
+    'stamp_scale_bar_length_2': 30,
+
+    # limits for the SED
+    'sed_width': 0.94,
+    'sed_height': 0.13,
+    'sed_left_align': 0.035,
+    'sed_bottom_align': 0.02,
+    'sed_size_hst': (4, 4),
+    'sed_size_nircam': (6, 6),
+    'sed_size_miri': (7, 7),
+
+
+    # plotting parameters
+    'hst_broad_band_color': 'tab:blue',
+    'hst_ha_color': 'tab:red',
+    'nircam_color': 'tab:green',
+    'miri_color': 'tab:purple',
+
+    'overview_title_font_size': 50,
+    'overview_label_size': 40,
+    'zoom_in_title_font_size': 40,
+    'zoom_in_label_size': 40,
+    'stamp_title_font_size': 40,
+    'stamp_label_size': 30,
+    'ha_ew_title_font_size': 40,
+    'ha_ew_label_size': 30,
+    'sed_title_font_size': 40,
+    'sed_label_size': 30,
+
+
+}
+
 
 
 phot_viewer_param_dic = {

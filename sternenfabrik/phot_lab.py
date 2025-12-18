@@ -17,7 +17,7 @@ import matplotlib.pyplot as plt
 # own packages
 from werkzeugkiste import helper_func, phys_params, phot_tools
 from obszugang import ObsAccess, ObsTools, ClusterCatAccess
-from malkasten import plotting_tools
+from malkasten import plotting_tools, plotting_params
 from sternenstaub import DustTools
 
 
@@ -28,13 +28,14 @@ class PhotLab(ObsAccess):
 
     def __init__(self, target_name=None, phot_hst_target_name=None, phot_hst_ha_cont_sub_target_name=None,
                  phot_nircam_target_name=None, phot_miri_target_name=None, phot_astrosat_target_name=None,
-                 x_target_name=None,
+                 x_target_name=None, radio_target_name=None,
                  nircam_data_ver='v1p1p1', miri_data_ver='v1p1p1', astrosat_data_ver='v1p0'):
         ObsAccess.__init__(
             self, target_name=target_name, phot_hst_target_name=phot_hst_target_name,
             phot_hst_ha_cont_sub_target_name=phot_hst_ha_cont_sub_target_name,
             phot_nircam_target_name=phot_nircam_target_name, phot_miri_target_name=phot_miri_target_name,
             phot_astrosat_target_name=phot_astrosat_target_name, x_target_name=x_target_name,
+            radio_target_name=radio_target_name,
             nircam_data_ver=nircam_data_ver, miri_data_ver=miri_data_ver, astrosat_data_ver=astrosat_data_ver)
 
     def get_aperture_radii_and_scales(self, band_list, instrument_list, obs_list, roi_arcsec, bkg_roi_rad_in_arcsec,
@@ -61,8 +62,8 @@ class PhotLab(ObsAccess):
             fwhm_pix = helper_func.CoordTools.transform_world2pix_scale(length_in_arcsec=fwhm_arcsec, wcs=wcs).value
             std_pix = helper_func.CoordTools.transform_world2pix_scale(length_in_arcsec=std_arcsec, wcs=wcs).value
             # estimate the standard_aperture_radius
-            standard_apert_rad_arcsec = phot_tools.ApertTools.get_standard_ap_rad_arcsec(obs=obs_list[band_idx],
-                                                                                         band=band, wcs=wcs)
+            standard_apert_rad_arcsec = phot_tools.ApertTools.get_standard_ap_rad_arcsec(
+                obs=obs_list[band_idx], band=band, wcs=wcs, instrument=instrument_list[band_idx])
             print(standard_apert_rad_arcsec)
             # now check if the standard aperture is smaller than the radius of interest
             if standard_apert_rad_arcsec < roi_arcsec:
@@ -72,7 +73,7 @@ class PhotLab(ObsAccess):
             else:
                 phot_aperture_arcsec = standard_apert_rad_arcsec
                 rad_in_arcsec, rad_out_arcsec = phot_tools.ApertTools.get_standard_bkg_annulus_rad_arcsec(
-                    obs=obs_list[band_idx], band=band, wcs=wcs)
+                    obs=obs_list[band_idx], band=band, wcs=wcs, instrument=instrument_list[band_idx])
 
             phot_aperture_pix = helper_func.CoordTools.transform_world2pix_scale(
                 length_in_arcsec=phot_aperture_arcsec, wcs=wcs).value
@@ -88,15 +89,15 @@ class PhotLab(ObsAccess):
         return (standard_phot_aperture_arcsec_list, phot_aperture_pix_list, phot_aperture_arcsec_list,
                 bkg_rad_in_arcsec_list, bkg_rad_out_arcsec_list, fwhm_pix_list, std_pix_list)
 
-    def get_src_cutout_and_recenter(self, ra, dec, band, instrument, roi_arcsec, max_rad_arcsec, cutout_size=None,
+    def get_src_cutout_and_recenter(self, ra, dec, band, instrument, roi_arcsec, max_rad_arcsec, enlarging_fact_for_max_rad=3, cutout_size=None,
                                     re_centering=True):
         # get the cutout_size
         if cutout_size is None:
-            cutout_size = (3 * max_rad_arcsec, 3 * max_rad_arcsec)
+            cutout_size = (enlarging_fact_for_max_rad * max_rad_arcsec, enlarging_fact_for_max_rad * max_rad_arcsec)
         else:
-            if ((cutout_size[0] < 3 * max_rad_arcsec) |
-                    (cutout_size[1] < 3 * max_rad_arcsec)):
-                cutout_size = (3 * max_rad_arcsec, 3 * max_rad_arcsec)
+            if ((cutout_size[0] < enlarging_fact_for_max_rad * max_rad_arcsec) |
+                    (cutout_size[1] < enlarging_fact_for_max_rad * max_rad_arcsec)):
+                cutout_size = (enlarging_fact_for_max_rad * max_rad_arcsec, enlarging_fact_for_max_rad * max_rad_arcsec)
 
         # get the cutout
         obs_cutout_dict = self.get_band_cutout_dict(ra_cutout=ra, dec_cutout=dec, cutout_size=cutout_size,
@@ -352,7 +353,7 @@ class PhotLab(ObsAccess):
                             include_hst=include_hst, include_nircam=include_nircam, include_miri=include_miri, include_astrosat=include_astrosat))
 
         # check if the bands are loaded!
-        self.load_phangs_bands(band_list=band_list, flux_unit=flux_unit, load_err=True)
+        self.load_obs_bands(band_list=band_list, flux_unit=flux_unit, load_err=True)
 
         # get observation abd instrument list
         obs_list, instrument_list, target_name_list = (
@@ -498,17 +499,17 @@ class PhotLab(ObsAccess):
                                                                    rotation=0)
 
                     plotting_tools.WCSPlottingTools.plot_coord_circle(ax=ax_img,
-                                                                      pos=SkyCoord(ra=ra * u.deg, dec=dec * u.deg),
+                                                                      pos=SkyCoord(ra=ra * u.deg, dec=dec * u.deg, frame='icrs'),
                                                                       rad=phot_aperture_arcsec_list[band_idx],
                                                                       color='tab:red', line_style='-', line_width=3,
                                                                       alpha=1., fill=False)
                     plotting_tools.WCSPlottingTools.plot_coord_circle(ax=ax_img,
-                                                                      pos=SkyCoord(ra=ra * u.deg, dec=dec * u.deg),
+                                                                      pos=SkyCoord(ra=ra * u.deg, dec=dec * u.deg, frame='icrs'),
                                                                       rad=bkg_rad_in_arcsec_list[band_idx],
                                                                       color='tab:blue', line_style='--', line_width=3,
                                                                       alpha=1., fill=False)
                     plotting_tools.WCSPlottingTools.plot_coord_circle(ax=ax_img,
-                                                                      pos=SkyCoord(ra=ra * u.deg, dec=dec * u.deg),
+                                                                      pos=SkyCoord(ra=ra * u.deg, dec=dec * u.deg, frame='icrs'),
                                                                       rad=bkg_rad_out_arcsec_list[band_idx],
                                                                       color='tab:blue', line_style='--', line_width=3,
                                                                       alpha=1., fill=False)
@@ -554,7 +555,7 @@ class PhotLab(ObsAccess):
 
                     # central_coordx, central_coordy = obs_cutout_dict['%s_img_cutout' % band].data.shape[0] / 2, obs_cutout_dict['%s_img_cutout' % band].data.shape[1] / 2
                     central_coordx, central_coordy = obs_cutout_dict['%s_img_cutout' % band].wcs.world_to_pixel(
-                        SkyCoord(ra=ra * u.deg, dec=dec * u.deg))
+                        SkyCoord(ra=ra * u.deg, dec=dec * u.deg, frame='icrs'))
                     # sort sources by distance
                     dist2center = np.sqrt((sub_src_detect['xcentroid'] - central_coordx) ** 2 + (
                             sub_src_detect['ycentroid'] - central_coordy) ** 2)
@@ -688,7 +689,7 @@ class PhotLab(ObsAccess):
                     miri_band_list.append(band)
 
         # check if the bands are loaded!
-        self.load_phangs_bands(band_list=band_list, flux_unit=flux_unit, load_err=True)
+        self.load_obs_bands(band_list=band_list, flux_unit=flux_unit, load_err=True)
 
         # get observation abd instrument list
         obs_list = []
@@ -862,17 +863,17 @@ class PhotLab(ObsAccess):
                                                                    rotation=0)
 
                     plotting_tools.WCSPlottingTools.plot_coord_circle(ax=ax_img,
-                                                                      pos=SkyCoord(ra=ra * u.deg, dec=dec * u.deg),
+                                                                      pos=SkyCoord(ra=ra * u.deg, dec=dec * u.deg, frame='icrs'),
                                                                       rad=phot_aperture_arcsec_list[band_idx],
                                                                       color='tab:red', line_style='-', line_width=3,
                                                                       alpha=1., fill=False)
                     plotting_tools.WCSPlottingTools.plot_coord_circle(ax=ax_img,
-                                                                      pos=SkyCoord(ra=ra * u.deg, dec=dec * u.deg),
+                                                                      pos=SkyCoord(ra=ra * u.deg, dec=dec * u.deg, frame='icrs'),
                                                                       rad=bkg_rad_in_arcsec_list[band_idx],
                                                                       color='tab:blue', line_style='--', line_width=3,
                                                                       alpha=1., fill=False)
                     plotting_tools.WCSPlottingTools.plot_coord_circle(ax=ax_img,
-                                                                      pos=SkyCoord(ra=ra * u.deg, dec=dec * u.deg),
+                                                                      pos=SkyCoord(ra=ra * u.deg, dec=dec * u.deg, frame='icrs'),
                                                                       rad=bkg_rad_out_arcsec_list[band_idx],
                                                                       color='tab:blue', line_style='--', line_width=3,
                                                                       alpha=1., fill=False)
@@ -962,7 +963,7 @@ class PhotLab(ObsAccess):
                             include_hst=include_hst, include_nircam=include_nircam, include_miri=include_miri, include_astrosat=include_astrosat))
 
         # check if the bands are loaded!
-        self.load_phangs_bands(band_list=band_list, flux_unit=flux_unit, load_err=True)
+        self.load_obs_bands(band_list=band_list, flux_unit=flux_unit, load_err=True)
 
         # get observation abd instrument list
         obs_list, instrument_list, target_name_list = (
@@ -1033,7 +1034,9 @@ class PhotLab(ObsAccess):
                 obs_cutout_dict, ra_re_center, dec_re_center = (
                     self.get_src_cutout_and_recenter(ra=ra, dec=dec, band=band,
                                                      instrument=instrument_list[band_idx], roi_arcsec=roi_arcsec,
-                                                     max_rad_arcsec=bkg_rad_out_arcsec_list[band_idx], cutout_size=cutout_size,
+                                                     max_rad_arcsec=bkg_rad_out_arcsec_list[band_idx],
+                                                     enlarging_fact_for_max_rad=3,
+                                                     cutout_size=cutout_size,
                                     re_centering=re_centering))
 
                 # perform photometry
@@ -1353,6 +1356,527 @@ class PhotLab(ObsAccess):
         return flux_table
 
 
+    def compute_custom_dynamic_apert_corr_photometry(
+            self, ra_list, dec_list, roi_arcsec, bkg_roi_rad_in_arcsec, bkg_roi_rad_out_arcsec,
+            idx_list=None,
+            band_list=None,
+            custom_profile_dict=None,
+            include_hst=True, include_nircam=True, include_miri=True, include_astrosat=False,
+            profile_fit_rad_frac=1,
+            cutout_size=None,
+            obj_name=None,
+            flux_unit='mJy',
+            verbose_flag=True,
+            plot_flag=True,
+            plot_output_path='plot_output/',
+            save_as_pdf=False
+    ):
+        """
+        This function is a first attempt in measuring an aperture corrected photometry of compact sources.
+
+        """
+
+        ########################
+        #### organize input ####
+        ########################
+        # check if the coordinates are a list or just a float
+        if isinstance(ra_list, float):
+            ra_list = [ra_list]
+            dec_list = [dec_list]
+        # get an index for sources or make them up
+        if idx_list is not None:
+            if not isinstance(idx_list, list):
+                idx_list = [idx_list]
+        else:
+            idx_list = np.arange(len(ra_list))
+
+        # get band list
+        band_list, hst_band_list, nircam_band_list, miri_band_list, astrosat_band_list = (
+            ObsTools.split_obs_band_list(
+                band_list=band_list, hst_target_name=self.phot_hst_target_name,
+                nircam_target_name=self.phot_nircam_target_name, miri_target_name=self.phot_miri_target_name,
+                astrosat_target_name=self.phot_astrosat_target_name,
+                            nircam_data_ver=self.nircam_data_ver, miri_data_ver=self.miri_data_ver,
+                astrosat_data_ver=self.astrosat_data_ver,
+                            include_hst=include_hst, include_nircam=include_nircam, include_miri=include_miri, include_astrosat=include_astrosat))
+
+        # get recenter list
+        if custom_profile_dict is None:
+            re_center_list = np.zeros(len(band_list), dtype=bool)
+        else:
+            re_center_list = np.zeros(len(band_list), dtype=bool)
+            for band_idx, band in enumerate(band_list):
+                if band in custom_profile_dict.keys():
+                    re_center_list[band_idx] = custom_profile_dict[band]['recenter']
+
+        # check if the bands are loaded!
+        self.load_obs_bands(band_list=band_list, flux_unit=flux_unit, load_err=True)
+
+        # get observation abd instrument list
+        obs_list, instrument_list, target_name_list = (
+            ObsTools.get_obs_list(band_list=band_list, hst_band_list=hst_band_list, nircam_band_list=nircam_band_list,
+                                  miri_band_list=miri_band_list, astrosat_band_list=astrosat_band_list,
+                                  hst_target_name=self.phot_hst_target_name,
+                                  nircam_target_name=self.phot_nircam_target_name,
+                                  miri_target_name=self.phot_miri_target_name,
+                                  astrosat_target_name=self.phot_astrosat_target_name,))
+
+        # get all the aperture and background sizes needed
+        (standard_phot_aperture_arcsec_list, phot_aperture_pix_list, phot_aperture_arcsec_list,
+         bkg_rad_in_arcsec_list, bkg_rad_out_arcsec_list, fwhm_pix_list, std_pix_list) = (
+            self.get_aperture_radii_and_scales(band_list=band_list, instrument_list=instrument_list, obs_list=obs_list,
+                                               roi_arcsec=roi_arcsec, bkg_roi_rad_in_arcsec=bkg_roi_rad_in_arcsec,
+                                               bkg_roi_rad_out_arcsec=bkg_roi_rad_out_arcsec))
+
+        # prepare flux table columns
+        flux_table_names = []
+        for band in band_list:
+            flux_table_names.append('%s_flux' % band)
+            flux_table_names.append('%s_flux_err' % band)
+            flux_table_names.append('%s_apert_corr_fact' % band)
+            flux_table_names.append('%s_apert_gal_ext_fact' % band)
+            flux_table_names.append('%s_flux_bkg_sub_no_corr' % band)
+            flux_table_names.append('%s_flux_apert' % band)
+            flux_table_names.append('%s_peak' % band)
+            flux_table_names.append('%s_flux_flag' % band)
+            flux_table_names.append('%s_median_bkg' % band)
+            flux_table_names.append('%s_mean_bkg' % band)
+            flux_table_names.append('%s_bkg_flag' % band)
+        # construct a table
+        r_rows = len(idx_list)
+        n_cols = len(band_list) * 11
+        flux_table = Table(np.zeros((r_rows, n_cols)), names=flux_table_names)
+
+        #################################
+        # now loop over all coordinates #
+        #################################
+        for running_idx, obj_idx, ra, dec in zip(range(len(idx_list)), idx_list, ra_list, dec_list):
+            if verbose_flag: print(running_idx, obj_idx, ra, dec)
+
+            if plot_flag:
+                fontsize_small_label = 40
+                fontsize_large_label = 50
+
+                fig_size_individual = (8, 8)
+                n_cols = 9
+                n_rows = int(np.ceil((len(band_list)) / (n_cols / 3)) + 3)
+
+                fig = plt.figure(figsize=(fig_size_individual[0] * n_cols, fig_size_individual[1] * n_rows))
+                gs = fig.add_gridspec(ncols=n_cols, nrows=n_rows, left=0.01, bottom=0.01, right=0.99, top=0.99,
+                                      wspace=0.01, hspace=0.01)
+                gs_sed = fig.add_gridspec(ncols=n_cols, nrows=n_rows, left=0.08, bottom=0.01, right=0.99, top=0.99,
+                                          wspace=0.5, hspace=0.5)
+                ax_sed = fig.add_subplot(gs_sed[:2, :])
+
+                ax_slit_labels = fig.add_subplot(gs[2, :])
+                add_slit_label_flag = True
+
+            ###########################
+            # now loop over all bands #
+            ###########################
+            idx_row = 3
+            idx_col = 0
+            for band_idx, band in enumerate(band_list):
+
+                if verbose_flag:
+                    print(band)
+                # get cutout and recenter image
+                obs_cutout_dict, ra_re_center, dec_re_center = (
+                    self.get_src_cutout_and_recenter(ra=ra, dec=dec, band=band,
+                                                     instrument=instrument_list[band_idx], roi_arcsec=roi_arcsec,
+                                                     max_rad_arcsec=bkg_rad_out_arcsec_list[band_idx],
+                                                     enlarging_fact_for_max_rad=5, cutout_size=cutout_size,
+                                                     re_centering=re_center_list[band_idx]))
+
+                # perform photometry
+                forced_photomerty_dict = phot_tools.ApertTools.compute_apert_photometry(
+                    apert_rad_arcsec=phot_aperture_arcsec_list[band_idx],
+                    bkg_rad_annulus_in_arcsec=bkg_rad_in_arcsec_list[band_idx],
+                    bkg_rad_annulus_out_arcsec=bkg_rad_out_arcsec_list[band_idx],
+                    data=obs_cutout_dict['%s_img_cutout' % band].data,
+                    data_err=obs_cutout_dict['%s_err_cutout' % band].data,
+                    wcs=obs_cutout_dict['%s_img_cutout' % band].wcs,
+                    ra=ra_re_center, dec=dec_re_center,
+                    mask=None, sigma_clip_sig=3, sigma_clip_maxiters=10, sum_method='exact')
+
+                # if the flux inside the aperture is negative there is no way we can do anything!.
+                # This is an absolute non detection!
+                if (forced_photomerty_dict['apert_flux'] <= 0) | (forced_photomerty_dict['src_flux'] <= 0):
+                    neg_flx_in_apert = True
+                else:
+                    neg_flx_in_apert = False
+
+                ########################################
+                #### Perform an aperture correction ####
+                ########################################
+                # we first get the radial profiles
+                rad_profile_dict = phot_tools.ProfileTools.get_rad_profile_dict(
+                    img=obs_cutout_dict['%s_img_cutout' % band].data - forced_photomerty_dict['bkg_median'],
+                    wcs=obs_cutout_dict['%s_img_cutout' % band].wcs,
+                    ra=ra_re_center, dec=dec_re_center,
+                    n_slits=12, max_rad_arcsec=bkg_rad_out_arcsec_list[band_idx] * 1.1,
+                    img_err=obs_cutout_dict['%s_err_cutout' % band].data,
+                    img_mask=np.isnan(obs_cutout_dict['%s_img_cutout' % band].data -
+                                      forced_photomerty_dict['bkg_median']))
+
+                # only if there is a signal in the aperture
+                if not neg_flx_in_apert:
+
+                    rad_of_interest_pix = helper_func.CoordTools.transform_world2pix_scale(
+                        length_in_arcsec=phot_aperture_arcsec_list[band_idx],
+                        wcs=obs_cutout_dict['%s_img_cutout' % band].wcs)
+
+                    # we now fit the profiles and use the costomiazation
+
+
+                    rad_profile_fit_dict = (
+                        phot_tools.ProfileTools.fit_custom_gauss2rad_profiles(
+                            rad_profile_dict=rad_profile_dict['slit_profile_dict'], std_pix=std_pix_list[band_idx],
+                            include_profile_frac_dict=custom_profile_dict[band]['include_profile_frac'],
+                            upper_sig_fact=10, central_rad_fact=5,
+                            radius_of_interest=rad_of_interest_pix * profile_fit_rad_frac))
+
+                    custom_consideration_mask = np.ones(len(rad_profile_fit_dict['amp_list']), dtype=bool)
+
+                    if custom_profile_dict is None:
+                        # now select the best gaussian fit
+                        best_gauss_dict = phot_tools.ProfileTools.get_best_gaussian_profile_params(
+                            amp_list=rad_profile_fit_dict['amp_list'], mu_list=rad_profile_fit_dict['mu_list'], sig_list=rad_profile_fit_dict['sig_list'],
+                            peak_acceptance_rad_pix=std_pix_list[band_idx] * 1, n_good_fits_needed=4)
+                    else:
+                        if not band in custom_profile_dict.keys():
+                            best_gauss_dict = phot_tools.ProfileTools.get_best_gaussian_profile_params(
+                                amp_list=rad_profile_fit_dict['amp_list'], mu_list=rad_profile_fit_dict['mu_list'], sig_list=rad_profile_fit_dict['sig_list'],
+                                peak_acceptance_rad_pix=std_pix_list[band_idx] * 1, n_good_fits_needed=4)
+                        else:
+                            for slit_idx in custom_profile_dict[band]['include_profile'].keys():
+                                custom_consideration_mask[slit_idx] = custom_profile_dict[band]['include_profile'][slit_idx]
+                            best_gauss_dict = phot_tools.ProfileTools.get_custom_gaussian_profile_params(
+                                amp_list=rad_profile_fit_dict['amp_list'], mu_list=rad_profile_fit_dict['mu_list'], sig_list=rad_profile_fit_dict['sig_list'],
+                                peak_acceptance_rad_pix=std_pix_list[band_idx] * 1,
+                                custom_consideration_mask=custom_consideration_mask)
+
+
+                    # find the best gaussian fit!
+                    mean_mu_arcsec = helper_func.CoordTools.transform_pix2world_scale(
+                        length_in_pix=best_gauss_dict['mean_mu'], wcs=obs_cutout_dict['%s_img_cutout' % band].wcs)
+                    mean_sig_arcsec = helper_func.CoordTools.transform_pix2world_scale(
+                        length_in_pix=best_gauss_dict['mean_sig'], wcs=obs_cutout_dict['%s_img_cutout' % band].wcs)
+
+                    # get a dummy gaussian
+                    n_pixels_in_bkg_rad = int(helper_func.CoordTools.transform_world2pix_scale(
+                        length_in_arcsec=bkg_rad_out_arcsec_list[band_idx],
+                        wcs=obs_cutout_dict['%s_img_cutout' % band].wcs) * 2)
+                    dummy_rad_arcsec = np.linspace(-bkg_rad_out_arcsec_list[band_idx],
+                                                   bkg_rad_out_arcsec_list[band_idx],
+                                                   n_pixels_in_bkg_rad * 10)
+                    mean_gauss = helper_func.FitTools.gaussian_func(
+                        amp=best_gauss_dict['mean_amp'], mu=mean_mu_arcsec,
+                        sig=mean_sig_arcsec, x_data=dummy_rad_arcsec)
+
+                    print('mean_sig_arcsec ', mean_sig_arcsec)
+                    # correction factor
+                    corr_fact, too_extended_flag = phot_tools.PSFTools.get_apert_gauss_corr_fact(
+                        band=band, instrument=instrument_list[band_idx], apert_rad=phot_aperture_arcsec_list[band_idx],
+                        std=mean_sig_arcsec)
+
+                else:
+                    corr_fact = None
+
+                # get galactic reddening correction
+                fore_ground_ext = DustTools.get_target_gal_ext_band(
+                    target=self.phot_target_name, band=band, obs=obs_list[band_idx],
+                    instrument=instrument_list[band_idx], ext_law='G23')
+
+                gal_red_corr_fact = 10 ** (fore_ground_ext / 2.5)
+
+                if plot_flag:
+
+                    ######################
+                    ###### plot img ######
+                    ######################
+                    # add axis
+                    ax_img = fig.add_subplot(gs[idx_row, idx_col],
+                                             projection=obs_cutout_dict['%s_img_cutout' % band].wcs)
+                    # get an image norm
+                    mean, median, std = sigma_clipped_stats(obs_cutout_dict['%s_img_cutout' % band].data, sigma=3.0)
+                    vmin = median - 1 * std
+                    vmax = median + 30 * std
+                    norm_img = ImageNormalize(stretch=LogStretch(), vmin=vmin, vmax=vmax)
+                    # display image
+                    ax_img.imshow(obs_cutout_dict['%s_img_cutout' % band].data, norm=norm_img, cmap='Greys')
+                    # cosmetics
+                    ax_img.axis('off')
+                    plotting_tools.StrTools.display_text_in_corner(
+                        ax=ax_img, text=band.upper(), fontsize=fontsize_large_label, text_color='tab:red',
+                        path_eff_color='k', )
+                    coords_world = SkyCoord(ra=ra_re_center * u.deg, dec=dec_re_center * u.deg, frame='icrs')
+                    # add a scale bar
+                    plotting_tools.WCSPlottingTools.plot_img_scale_bar(
+                        ax=ax_img, img_shape=obs_cutout_dict['%s_img_cutout' % band].data.shape,
+                        wcs=obs_cutout_dict['%s_img_cutout' % band].wcs, bar_length=1, length_unit='arcsec',
+                        bar_color='red', text_color='red', line_width=4, fontsize=fontsize_small_label,
+                        va='bottom', ha='left', x_offset=0.05, y_offset=0.05, text_y_offset_diff=0.01,
+                        path_eff=True, path_eff_color='k')
+                    # plot aperture_radius and background annuli
+                    plotting_tools.WCSPlottingTools.plot_coord_circle(
+                        ax=ax_img, pos=coords_world, rad=phot_aperture_arcsec_list[band_idx],
+                        color='tab:red', line_style='-', line_width=5, alpha=1., fill=False)
+                    plotting_tools.WCSPlottingTools.plot_coord_circle(
+                        ax=ax_img, pos=coords_world, rad=bkg_rad_in_arcsec_list[band_idx],
+                        color='tab:blue', line_style='--', line_width=5, alpha=1., fill=False)
+                    plotting_tools.WCSPlottingTools.plot_coord_circle(
+                        ax=ax_img, pos=coords_world, rad=bkg_rad_out_arcsec_list[band_idx],
+                        color='tab:blue', line_style='--', line_width=5, alpha=1., fill=False)
+
+                    ##################################
+                    ###### plot radial profiles ######
+                    ##################################
+
+                    ax_slit_profiles = fig.add_subplot(gs[idx_row, idx_col+1:idx_col+3])
+                    # plot all the gaussians
+
+                    n_colors = len(rad_profile_dict['slit_profile_dict']['list_angle_idx'])
+
+
+                    for idx in rad_profile_dict['slit_profile_dict']['list_angle_idx']:
+                        profile_color = plotting_params.color_list_rainbow(idx / n_colors)
+
+                        if add_slit_label_flag:
+                            ax_slit_labels.plot([],[], color=profile_color, linewidth=5,
+                                                label=r'Slit-id %i, %i$^{\rm O}$' %
+                                                      (idx, rad_profile_dict['slit_profile_dict']['list_angles'][idx]))
+
+
+                        rad_arcsec = helper_func.CoordTools.transform_pix2world_scale(
+                            length_in_pix=rad_profile_dict['slit_profile_dict'][str(idx)]['radius_data'],
+                            wcs=obs_cutout_dict['%s_img_cutout' % band].wcs)
+
+                        # get arrow for image
+
+                        pos_arrow_head_world = (
+                            SkyCoord(ra=ra_re_center * u.deg, dec=dec_re_center * u.deg, frame='icrs').
+                            directional_offset_by(
+                                (rad_profile_dict['slit_profile_dict']['list_angles'][idx] * np.pi / 180 - np.pi/2) * u.rad,
+                                bkg_rad_out_arcsec_list[band_idx] * 1.1 * u.arcsec))
+
+                        pos_arrow_bottom_world = (
+                            SkyCoord(ra=ra_re_center * u.deg, dec=dec_re_center * u.deg, frame='icrs').directional_offset_by(
+                                (rad_profile_dict['slit_profile_dict']['list_angles'][idx] * np.pi / 180 - np.pi/2) * u.rad,
+                                bkg_rad_out_arcsec_list[band_idx] * 1.7 * u.arcsec))
+
+                        pos_arrow_head_pix = obs_cutout_dict['%s_img_cutout' % band].wcs.world_to_pixel(pos_arrow_head_world)
+                        pos_arrow_bottom_pix = obs_cutout_dict['%s_img_cutout' % band].wcs.world_to_pixel(pos_arrow_bottom_world)
+
+                        # get the color
+                        if not neg_flx_in_apert:
+                            if best_gauss_dict['mask_good_fits'][idx] * custom_consideration_mask[idx]:
+
+
+                                discplay_mask = rad_profile_fit_dict['include_in_fit_mask_list'][idx]
+                                ax_slit_profiles.plot(rad_arcsec[discplay_mask],
+                                                      rad_profile_dict['slit_profile_dict'][str(idx)]['profile_data'][discplay_mask],
+                                                      color=profile_color, linewidth=3)
+                                ax_slit_profiles.scatter(rad_arcsec[discplay_mask],
+                                                      rad_profile_dict['slit_profile_dict'][str(idx)]['profile_data'][discplay_mask],
+                                                      color=profile_color, s=100)
+                                ax_slit_profiles.plot(rad_arcsec[~discplay_mask],
+                                                      rad_profile_dict['slit_profile_dict'][str(idx)]['profile_data'][~discplay_mask],
+                                                      color=profile_color, linewidth=3, alpha=0.4)
+
+                                # plot an arrow on image
+                                plotting_tools.ArrowTools.plot_arrow_with_text(
+                                    ax=ax_img, x1=pos_arrow_bottom_pix[0] , x2=pos_arrow_head_pix[0],
+                                    y1=pos_arrow_bottom_pix[1], y2=pos_arrow_head_pix[1],
+                                    text_str='',
+                                 awwor_line_width=8, awwor_line_color=profile_color, arrow_line_style='-',
+                                 arrow_type='-|>', arrow_head_width=1, arrow_head_length=2,
+                                 arrow_alpha=1.0)
+
+
+                            else:
+                                ax_slit_profiles.plot(
+                                    rad_arcsec,
+                                    rad_profile_dict['slit_profile_dict'][str(idx)]['profile_data'],
+                                                      color=profile_color, alpha=0.4, linewidth=1)
+                                # plot an arrow on image
+                                plotting_tools.ArrowTools.plot_arrow_with_text(
+                                    ax=ax_img, x1=pos_arrow_bottom_pix[0] , x2=pos_arrow_head_pix[0],
+                                    y1=pos_arrow_bottom_pix[1], y2=pos_arrow_head_pix[1],
+                                    text_str='',
+                                 awwor_line_width=8, awwor_line_color=profile_color, arrow_line_style='-',
+                                 arrow_type='-|>', arrow_head_width=1, arrow_head_length=2,
+                                 arrow_alpha=0.1)
+
+
+                        else:
+                            ax_slit_profiles.plot(rad_arcsec,
+                                                  rad_profile_dict['slit_profile_dict'][str(idx)]['profile_data'],
+                                                  color=profile_color, alpha=0.4, linewidth=1)
+                                                            # plot an arrow on image
+                            plotting_tools.ArrowTools.plot_arrow_with_text(
+                                    ax=ax_img, x1=pos_arrow_bottom_pix[0] , x2=pos_arrow_head_pix[0],
+                                    y1=pos_arrow_bottom_pix[1], y2=pos_arrow_head_pix[1],
+                                    text_str='',
+                                 awwor_line_width=8, awwor_line_color=profile_color, arrow_line_style='-',
+                                 arrow_type='-|>', arrow_head_width=1, arrow_head_length=2,
+                                 arrow_alpha=0.1)
+
+                    add_slit_label_flag = False
+                    ax_slit_labels.legend(frameon=False, ncols=4, loc=3, fontsize=fontsize_large_label)
+                    ax_slit_labels.axis('off')
+                    if not neg_flx_in_apert:
+                        ax_slit_profiles.plot(
+                            [phot_aperture_arcsec_list[band_idx], phot_aperture_arcsec_list[band_idx]],
+                            [0, best_gauss_dict['mean_amp'] * 0.5], color='tab:red', linewidth=4)
+                        ax_slit_profiles.plot(
+                            [-phot_aperture_arcsec_list[band_idx], -phot_aperture_arcsec_list[band_idx]],
+                            [0, best_gauss_dict['mean_amp'] * 0.5], color='tab:red', linewidth=4)
+                        ax_slit_profiles.plot([bkg_rad_in_arcsec_list[band_idx], bkg_rad_in_arcsec_list[band_idx]],
+                                              [0, best_gauss_dict['mean_amp'] * 0.5], color='tab:blue', linestyle='--',
+                                              linewidth=4)
+                        ax_slit_profiles.plot([-bkg_rad_in_arcsec_list[band_idx], -bkg_rad_in_arcsec_list[band_idx]],
+                                              [0, best_gauss_dict['mean_amp'] * 0.5], color='tab:blue', linestyle='--',
+                                              linewidth=4)
+                        ax_slit_profiles.plot([bkg_rad_out_arcsec_list[band_idx], bkg_rad_out_arcsec_list[band_idx]],
+                                              [0, best_gauss_dict['mean_amp'] * 0.5], color='tab:blue', linestyle='--',
+                                              linewidth=4)
+                        ax_slit_profiles.plot([-bkg_rad_out_arcsec_list[band_idx], -bkg_rad_out_arcsec_list[band_idx]],
+                                              [0, best_gauss_dict['mean_amp'] * 0.5], color='tab:blue', linestyle='--',
+                                              linewidth=4)
+
+                    if not neg_flx_in_apert:
+                        ax_slit_profiles.plot(dummy_rad_arcsec, mean_gauss, linewidth=5, color='k', linestyle='--')
+
+                        plotting_tools.AxisTools.frame2axis(ax=ax_slit_profiles, color='k', line_width=3)
+                        ax_slit_profiles.tick_params(which='both', width=3, length=5, direction='in', color='k',
+                                                     labelsize=fontsize_large_label)
+
+                        plotting_tools.StrTools.display_text_in_corner(
+                            ax=ax_slit_profiles, text=r'F$_{corr.}$=' + '\n %.2f' % corr_fact,
+                            x_frac=0.98, y_frac=0.98, horizontal_alignment='right',
+                            vertical_alignment='top',
+                            fontsize=fontsize_large_label, text_color='k')
+
+                        ax_slit_profiles.set_ylim(ax_slit_profiles.get_ylim()[0], np.max(mean_gauss) * 1.5)
+
+                    else:
+                        plotting_tools.StrTools.display_text_in_corner(
+                            ax=ax_slit_profiles, text=r'No Signal',
+                            x_frac=0.98, y_frac=0.98, horizontal_alignment='right',
+                            vertical_alignment='top',
+                            fontsize=fontsize_large_label, text_color='k')
+
+                    ax_slit_profiles.set_xticklabels([])
+                    ax_slit_profiles.set_yticklabels([])
+
+
+
+
+                    idx_col += 3
+                    if idx_col >= n_cols:
+                        idx_col = 0
+                        idx_row += 1
+
+                    # plot sed point
+                    mean_band_wavelength = ObsTools.get_obs_wave(
+                        target=target_name_list[band_idx], band=band, obs=obs_list[band_idx],
+                        instrument=instrument_list[band_idx], wave_estimator='mean_wave', unit='mu')
+                    min_band_wavelength = ObsTools.get_obs_wave(
+                        target=target_name_list[band_idx], band=band, obs=obs_list[band_idx],
+                        instrument=instrument_list[band_idx], wave_estimator='min_wave', unit='mu')
+                    max_band_wavelength = ObsTools.get_obs_wave(
+                        target=target_name_list[band_idx], band=band, obs=obs_list[band_idx],
+                        instrument=instrument_list[band_idx], wave_estimator='max_wave', unit='mu')
+
+                    # plot SED point only when there is a detection
+
+                    if (not neg_flx_in_apert) & (
+                            (forced_photomerty_dict['src_flux'] / forced_photomerty_dict['src_flux_err']) > 3):
+
+                        ax_sed.errorbar(mean_band_wavelength, forced_photomerty_dict['src_flux'],
+                                        xerr=[[mean_band_wavelength - min_band_wavelength],
+                                              [max_band_wavelength - mean_band_wavelength]],
+                                        yerr=forced_photomerty_dict['src_flux_err'],
+                                        fmt='.', color='k', ms=60)
+
+                        ax_sed.errorbar(mean_band_wavelength, forced_photomerty_dict['src_flux'] * corr_fact,
+                                        xerr=[[mean_band_wavelength - min_band_wavelength],
+                                              [max_band_wavelength - mean_band_wavelength]],
+                                        yerr=forced_photomerty_dict['src_flux_err'] * corr_fact,
+                                        fmt='.', color='tab:red', ms=45)
+
+                        ax_sed.errorbar(mean_band_wavelength,
+                                        forced_photomerty_dict['src_flux'] * corr_fact * gal_red_corr_fact,
+                                        xerr=[[mean_band_wavelength - min_band_wavelength],
+                                              [max_band_wavelength - mean_band_wavelength]],
+                                        yerr=forced_photomerty_dict['src_flux_err'] * corr_fact * gal_red_corr_fact,
+                                        fmt='.', color='tab:blue', ms=30)
+                    else:
+                        ax_sed.errorbar(mean_band_wavelength, forced_photomerty_dict['src_flux_err'],
+                                        uplims=True,
+                                        xerr=[[mean_band_wavelength - min_band_wavelength],
+                                              [max_band_wavelength - mean_band_wavelength]],
+                                        yerr=forced_photomerty_dict['src_flux_err'],
+                                        fmt='.', color='k', ms=60)
+
+                # fill table with values
+                # correct for flux
+                if not neg_flx_in_apert:
+                    flux_table['%s_flux' % band][running_idx] = forced_photomerty_dict[
+                                                                    'src_flux'] * corr_fact * gal_red_corr_fact
+                    flux_table['%s_flux_err' % band][running_idx] = forced_photomerty_dict[
+                                                                        'src_flux_err'] * corr_fact * gal_red_corr_fact
+                else:
+                    flux_table['%s_flux' % band][running_idx] = forced_photomerty_dict['src_flux_err']
+                    flux_table['%s_flux_err' % band][running_idx] = forced_photomerty_dict['src_flux_err']
+                # the aperture corr factors
+                flux_table['%s_apert_corr_fact' % band][running_idx] = corr_fact
+                flux_table['%s_apert_gal_ext_fact' % band][running_idx] = gal_red_corr_fact
+                # uncorrected fluxes
+                flux_table['%s_flux_bkg_sub_no_corr' % band][running_idx] = forced_photomerty_dict['src_flux']
+                flux_table['%s_flux_apert' % band][running_idx] = forced_photomerty_dict['apert_flux']
+                # statistics from aperture and annulus
+                flux_table['%s_peak' % band][running_idx] = forced_photomerty_dict['apert_max']
+                flux_table['%s_flux_flag' % band][running_idx] = forced_photomerty_dict['flux_measure_ok_flag']
+                flux_table['%s_median_bkg' % band][running_idx] = forced_photomerty_dict['bkg_median']
+                flux_table['%s_mean_bkg' % band][running_idx] = forced_photomerty_dict['bkg_mean']
+                flux_table['%s_bkg_flag' % band][running_idx] = forced_photomerty_dict['bkg_ok_flag']
+
+            if plot_flag:
+                ax_sed.set_xscale('log')
+                ax_sed.set_yscale('log')
+                if obj_name is not None:
+                    plotting_tools.StrTools.display_text_in_corner(y_frac=0.95,
+                                                                   ax=ax_sed, text=obj_name.upper(),
+                                                                   fontsize=fontsize_large_label + 10,
+                                                                   text_color='dimgray', path_eff_color='k', )
+
+                plotting_tools.AxisTools.frame2axis(ax=ax_sed, color='k', line_width=3)
+
+                ax_sed.scatter([], [], s=1000, color='k', label='Measured Flux')
+                ax_sed.scatter([], [], s=700, color='tab:red', label='Measured Flux + Apert. Corr.')
+                ax_sed.scatter([], [], s=400, color='tab:blue', label='Measured Flux + Apert. Corr. + Gal. Ext. Corr.')
+
+                ax_sed.legend(frameon=False, loc=4, fontsize=fontsize_large_label)
+
+                ax_sed.set_xlabel(r'Wavelength [$\mu$m]', fontsize=fontsize_large_label, labelpad=-10)
+                ax_sed.set_ylabel(r'flux [mJy]', fontsize=fontsize_large_label)
+                ax_sed.tick_params(axis='both', which='major', width=5, length=15, direction='in', color='k',
+                                   labelsize=fontsize_large_label)
+                ax_sed.tick_params(axis='both', which='minor', width=3, length=10, direction='in', color='k',
+                                   labelsize=fontsize_large_label)
+
+                # plt.subplots_adjust(left=0.05, bottom=0.01, right=0.99, top=0.99, wspace=0.01, hspace=0.05)
+                if not os.path.isdir(plot_output_path):
+                    os.makedirs(plot_output_path)
+                fig.savefig(plot_output_path + 'compact_src_photmetry_%s_%i.png' % (self.phot_target_name, obj_idx))
+                if save_as_pdf:
+                    fig.savefig(plot_output_path + 'compact_src_photmetry_%s_%i.pdf' % (self.phot_target_name, obj_idx))
+                plt.close(fig)
+
+        return flux_table
+
 
 
 
@@ -1404,7 +1928,7 @@ class PhotLab(ObsAccess):
                             include_hst=include_hst, include_nircam=include_nircam, include_miri=include_miri, include_astrosat=include_astrosat))
 
         # check if the bands are loaded!
-        self.load_phangs_bands(band_list=band_list, flux_unit=flux_unit, load_err=True)
+        self.load_obs_bands(band_list=band_list, flux_unit=flux_unit, load_err=True)
 
         # get observation abd instrument list
         obs_list, instrument_list, target_name_list = (
@@ -1471,7 +1995,7 @@ class PhotLab(ObsAccess):
 
                 if verbose_flag:
                     print(band)
-
+                # get cutout and recenter image
                 obs_cutout_dict, ra_re_center, dec_re_center = (
                     self.get_src_cutout_and_recenter(ra=ra, dec=dec, band=band,
                                                      instrument=instrument_list[band_idx], roi_arcsec=roi_arcsec,
