@@ -1,8 +1,6 @@
 """
 Tool to visualize PHANGS imaging data
 """
-# technical functions
-import os.path
 import numpy as np
 from astropy.coordinates import SkyCoord
 import astropy.units as u
@@ -10,10 +8,9 @@ from astropy.visualization import SqrtStretch, LogStretch
 from astropy.visualization.mpl_normalize import ImageNormalize
 import matplotlib.pyplot as plt
 from matplotlib.colors import Normalize, LogNorm
-
 from werkzeugkiste import helper_func, phys_params, phot_tools
 from malkasten import plotting_tools
-from obszugang import ObsTools, obs_info
+from obszugang import ObsTools, obs_info, ClusterCatAccess
 from sternenfabrik import plot_params
 from sternenfabrik.phot_lab import PhotLab
 
@@ -844,24 +841,46 @@ class PlotFabrik(PhotLab):
                                        fig_dict['2to7_cbar_width'],
                                        fig_dict['2to7_cbar_height']])
 
-        min_0p5to2 = np.min(cutout_0p5to2.data) + 0.1
-        min_2to7 = np.min(cutout_2to7.data) + 0.1
-        norm_0p5to2 = plotting_tools.ColorBarTools.compute_cbar_norm(vmin_vmax=(min_0p5to2, np.max(cutout_0p5to2.data)), log_scale=True)
-        norm_2to7 = plotting_tools.ColorBarTools.compute_cbar_norm(vmin_vmax=(min_2to7, np.max(cutout_2to7.data)), log_scale=True)
+        min_0p5to2 = np.min(cutout_0p5to2.data)
+        min_2to7 = np.min(cutout_2to7.data)
 
-        ax_zoom_in_0p5to2.imshow(cutout_0p5to2.data, cmap=fig_dict['0p5to2_cmap'], norm=norm_0p5to2)
-        ax_zoom_in_2to7.imshow(cutout_2to7.data, cmap=fig_dict['2to7_cmap'], norm=norm_2to7)
+        max_0p5to2 = np.max(cutout_0p5to2.data)
+        max_2to7 = np.max(cutout_2to7.data)
+
+        if max_0p5to2 != 0:
+            norm_0p5to2 = plotting_tools.ColorBarTools.compute_cbar_norm(vmin_vmax=(min_0p5to2 + 0.1, max_0p5to2), log_scale=True)
+            ax_zoom_in_0p5to2.imshow(cutout_0p5to2.data, cmap=fig_dict['0p5to2_cmap'], norm=norm_0p5to2)
+
+            plotting_tools.ColorBarTools.create_cbar(ax_cbar=ax_cbar_0p5to2, cmap=fig_dict['0p5to2_cmap'],
+                                                     norm=norm_0p5to2, cbar_label=r'Counts', fontsize=fig_dict['zoom_in_label_size'], ticks=None, labelpad=2, tick_width=2,
+                            orientation='horizontal', top_lable=True, label_color='k',
+                            extend='neither')
+        else:
+            ax_zoom_in_0p5to2.imshow(cutout_0p5to2.data, cmap=fig_dict['0p5to2_cmap'])
+
+        if max_2to7 != 0:
+            norm_2to7 = plotting_tools.ColorBarTools.compute_cbar_norm(vmin_vmax=(min_2to7 + 0.1, max_2to7), log_scale=True)
+            ax_zoom_in_2to7.imshow(cutout_2to7.data, cmap=fig_dict['2to7_cmap'], norm=norm_2to7)
+
+            plotting_tools.ColorBarTools.create_cbar(ax_cbar=ax_cbar_2to7, cmap=fig_dict['2to7_cmap'],
+                                                     norm=norm_2to7, cbar_label=r'Counts', fontsize=fig_dict['zoom_in_label_size'], ticks=None, labelpad=2, tick_width=2,
+                            orientation='horizontal', top_lable=True, label_color='k',
+                            extend='neither')
+        else:
+            ax_zoom_in_2to7.imshow(cutout_2to7.data, cmap=fig_dict['2to7_cmap'])
 
 
-        plotting_tools.ColorBarTools.create_cbar(ax_cbar=ax_cbar_0p5to2, cmap=fig_dict['0p5to2_cmap'],
-                                                 norm=norm_0p5to2, cbar_label=r'Counts', fontsize=fig_dict['zoom_in_label_size'], ticks=None, labelpad=2, tick_width=2,
-                        orientation='horizontal', top_lable=True, label_color='k',
-                        extend='neither')
-
-        plotting_tools.ColorBarTools.create_cbar(ax_cbar=ax_cbar_2to7, cmap=fig_dict['2to7_cmap'],
-                                                 norm=norm_2to7, cbar_label=r'Counts', fontsize=fig_dict['zoom_in_label_size'], ticks=None, labelpad=2, tick_width=2,
-                        orientation='horizontal', top_lable=True, label_color='k',
-                        extend='neither')
+        # norm_2to7 = plotting_tools.ColorBarTools.compute_cbar_norm(vmin_vmax=(min_2to7 + 0.1, max_2to7), log_scale=True)
+        #
+        # ax_zoom_in_2to7.imshow(cutout_2to7.data, cmap=fig_dict['2to7_cmap'], norm=norm_2to7)
+        #
+        #
+        #
+        #
+        # plotting_tools.ColorBarTools.create_cbar(ax_cbar=ax_cbar_2to7, cmap=fig_dict['2to7_cmap'],
+        #                                          norm=norm_2to7, cbar_label=r'Counts', fontsize=fig_dict['zoom_in_label_size'], ticks=None, labelpad=2, tick_width=2,
+        #                 orientation='horizontal', top_lable=True, label_color='k',
+        #                 extend='neither')
 
         plotting_tools.StrTools.display_text_in_corner(ax=ax_zoom_in_0p5to2, text='0.5 - 2 eV',
                                                            fontsize=fig_dict['zoom_in_title_font_size'],
@@ -883,7 +902,6 @@ class PlotFabrik(PhotLab):
             ax=ax_zoom_in_0p5to2, ra_tick_label=False, dec_tick_label=False, ra_axis_label=' ', dec_axis_label=' ')
         plotting_tools.WCSPlottingTools.arr_axis_params(
             ax=ax_zoom_in_2to7, ra_tick_label=False, dec_tick_label=False, ra_axis_label=' ', dec_axis_label=' ')
-
 
     def plot_radio_cont_zoom_in(self, fig, fig_dict, ra, dec):
 
@@ -966,11 +984,6 @@ class PlotFabrik(PhotLab):
             ax=ax_zoom_in_tt0, ra_tick_label=False, dec_tick_label=False, ra_axis_label=' ', dec_axis_label=' ')
         plotting_tools.WCSPlottingTools.arr_axis_params(
             ax=ax_zoom_in_alpha, ra_tick_label=False, dec_tick_label=False, ra_axis_label=' ', dec_axis_label=' ')
-
-
-
-
-
 
     def get_rgb_zoom_in(self, ra, dec, cutout_size, band_red, band_green, band_blue, ref_filter='blue', **kwargs):
         """
@@ -1948,6 +1961,11 @@ class PlotFabrik(PhotLab):
         prelim_nircam_band_list = self.get_covered_nircam_band_list(ra=ra, dec=dec)
         prelim_miri_band_list = self.get_covered_miri_band_list(ra=ra, dec=dec)
 
+        print('prelim_hst_broad_band_list ', prelim_hst_broad_band_list)
+        print('prelim_hst_ha_band ', prelim_hst_ha_band)
+        print('prelim_nircam_band_list ', prelim_nircam_band_list)
+        print('prelim_miri_band_list ', prelim_miri_band_list)
+
         prelim_band_list = self.get_covered_hst_broad_band_list(ra=ra, dec=dec)
         if ObsTools.check_hst_ha_obs(target=self.phot_hst_target_name):
             if self.check_coords_covered_by_band(obs="hst", ra=ra, dec=dec,
@@ -2381,6 +2399,71 @@ class PlotFabrik(PhotLab):
         #                                                   display_label=True, font_size_title=fig_dict['em_title_font_size'],
         #                                                   display_y_label=False, display_x_label=True)
 
+    def plot_kcwi_muse_spec(self, fig, fig_dict, kcwi_spec_dict=None, muse_spec_dict=None):
+
+        # add sed axis
+        ax_spec = fig.add_axes([
+            fig_dict['spec_left_align'],
+            fig_dict['spec_bottom_align'],
+            fig_dict['spec_width'],
+            fig_dict['spec_height'],
+        ])
+
+        if kcwi_spec_dict is not None:
+            kcwi_flux = kcwi_spec_dict['native_spec_flx'].to((1e-20) * u.erg / u.s / u.cm / u.cm / u.Angstrom)
+            ax_spec.plot(kcwi_spec_dict['native_wave'], kcwi_flux, linewidth=2)
+
+        if muse_spec_dict is not None:
+            muse_flux = muse_spec_dict['native_spec_flx'].to((1e-20) * u.erg / u.s / u.cm / u.cm / u.Angstrom)
+            ax_spec.plot(muse_spec_dict['native_wave'], muse_flux, linewidth=2)
+
+        ax_spec.set_xscale('log')
+        ax_spec.set_yscale('log')
+
+        if kcwi_spec_dict is not None:
+            ax_blue_bump = fig.add_axes([
+                fig_dict['blue_bump_left_align'],
+                fig_dict['blue_bump_bottom_align'],
+                fig_dict['blue_bump_width'],
+                fig_dict['blue_bump_height'],
+            ])
+
+            plotting_tools.SpecPlotTools.plot_spec_feature_window(
+                ax=ax_blue_bump, spec_dict=kcwi_spec_dict, font_size_label=fig_dict['spec_title_font_size'],
+                spec_feature='Blue Bump')
+
+        if muse_spec_dict is not None:
+
+            ax_red_bump = fig.add_axes([
+                fig_dict['red_bump_left_align'],
+                fig_dict['red_bump_bottom_align'],
+                fig_dict['red_bump_width'],
+                fig_dict['red_bump_height'],
+            ])
+
+
+
+            plotting_tools.SpecPlotTools.plot_spec_feature_window(
+                ax=ax_red_bump, spec_dict=muse_spec_dict, font_size_label=fig_dict['spec_title_font_size'],
+                spec_feature='Red Bump')
+
+
+
+            ax_ha = fig.add_axes([
+                fig_dict['ha_left_align'],
+                fig_dict['ha_bottom_align'],
+                fig_dict['ha_width'],
+                fig_dict['ha_height'],
+            ])
+
+            plotting_tools.SpecPlotTools.plot_spec_feature_window(
+                ax=ax_ha, spec_dict=muse_spec_dict, font_size_label=fig_dict['spec_title_font_size'],
+                spec_feature='Halpha')
+
+
+
+
+
     @staticmethod
     def phangs_holistic_viewer1(ra, dec, target_name=None, phot_visual_access=None,
                                 plot_rad_profile=False, plot_sed=False,
@@ -2504,6 +2587,66 @@ class PlotFabrik(PhotLab):
 
         return fig
 
+    def wr_inspector(self, ra, dec, plot_sed=False, plot_x_ray=True, kcwi_spec_dict=None, muse_spec_dict=None):
+        """
+
+        This method creates an inspection plot to identify WR features
+
+        """
+
+        # create figure
+        fig = plotting_tools.AxisTools.init_fig(fig_dict=plot_params.wr_inspector_param_dic)
+
+        # create the overview plot
+        self.plot_hst_overview_panel(fig=fig, fig_dict=plot_params.wr_inspector_param_dic,
+                                                   ra_box=ra, dec_box=dec)
+
+        # plot environment zoom in panels
+        self.plot_zoom_in_panel_group_extra_nircam(fig=fig, fig_dict=plot_params.wr_inspector_param_dic,
+                                                   obs_list=['hst_broad_band', 'hst_ha', 'nircam1', 'miri1'],
+                                                   ra=ra, dec=dec)
+
+        # add xray
+        if plot_x_ray:
+            self.plot_x_ray_zoom_in(fig=fig, fig_dict=plot_params.wr_inspector_param_dic, ra=ra, dec=dec)
+
+
+
+        self.plot_kcwi_muse_spec(fig=fig, fig_dict=plot_params.wr_inspector_param_dic,
+                                 muse_spec_dict=muse_spec_dict, kcwi_spec_dict=kcwi_spec_dict)
+
+        # plot sed estimation
+        if plot_sed:
+            self.plot_sed_panel(fig=fig, fig_dict=plot_params.wr_inspector_param_dic, ra=ra, dec=dec,
+                                              individual_band_list=plot_params.wr_inspector_param_dic['individual_band_list'])
+
+        return fig
+
+
+
+    def vms_quick_inspector(self, ra, dec, kcwi_spec_dict=None, muse_spec_dict=None):
+        """
+
+        This method creates an inspection plot to identify WR features
+
+        """
+
+        # create figure
+        fig = plotting_tools.AxisTools.init_fig(fig_dict=plot_params.vms_quick_inspector_param_dic)
+
+        # create the overview plot
+        self.plot_hst_overview_panel(fig=fig, fig_dict=plot_params.vms_quick_inspector_param_dic,
+                                                   ra_box=ra, dec_box=dec)
+
+        # plot environment zoom in panels
+        self.plot_zoom_in_panel_group_extra_nircam(fig=fig, fig_dict=plot_params.vms_quick_inspector_param_dic,
+                                                   obs_list=['hst_ha', 'nircam1'],
+                                                   ra=ra, dec=dec)
+
+        self.plot_kcwi_muse_spec(fig=fig, fig_dict=plot_params.vms_quick_inspector_param_dic,
+                                 muse_spec_dict=muse_spec_dict, kcwi_spec_dict=kcwi_spec_dict)
+
+        return fig
 
 
 

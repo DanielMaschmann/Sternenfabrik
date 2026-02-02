@@ -1,20 +1,16 @@
 """
 Tool to visualize PHANGS imaging data
 """
-# technical functions
 import os.path
 import numpy as np
 from scipy.interpolate import interp1d
-# astropy functions
+import matplotlib.pyplot as plt
 from astropy.coordinates import SkyCoord
 import astropy.units as u
 from astropy.stats import sigma_clipped_stats, SigmaClip
 from astropy.visualization import SqrtStretch, LogStretch
 from astropy.visualization.mpl_normalize import ImageNormalize
 from astropy.table import QTable, Table, Column
-# plotting functions
-import matplotlib.pyplot as plt
-# own packages
 from werkzeugkiste import helper_func, phys_params, phot_tools
 from obszugang import ObsAccess, ObsTools, ClusterCatAccess
 from malkasten import plotting_tools, plotting_params
@@ -1360,6 +1356,7 @@ class PhotLab(ObsAccess):
             self, ra_list, dec_list, roi_arcsec, bkg_roi_rad_in_arcsec, bkg_roi_rad_out_arcsec,
             idx_list=None,
             band_list=None,
+            instrument_list=None,
             custom_profile_dict=None,
             include_hst=True, include_nircam=True, include_miri=True, include_astrosat=False,
             profile_fit_rad_frac=1,
@@ -1414,7 +1411,8 @@ class PhotLab(ObsAccess):
 
         # get observation abd instrument list
         obs_list, instrument_list, target_name_list = (
-            ObsTools.get_obs_list(band_list=band_list, hst_band_list=hst_band_list, nircam_band_list=nircam_band_list,
+            ObsTools.get_obs_list(band_list=band_list, instrument_list=instrument_list,
+                                  hst_band_list=hst_band_list, nircam_band_list=nircam_band_list,
                                   miri_band_list=miri_band_list, astrosat_band_list=astrosat_band_list,
                                   hst_target_name=self.phot_hst_target_name,
                                   nircam_target_name=self.phot_nircam_target_name,
@@ -1562,6 +1560,10 @@ class PhotLab(ObsAccess):
                         length_in_pix=best_gauss_dict['mean_mu'], wcs=obs_cutout_dict['%s_img_cutout' % band].wcs)
                     mean_sig_arcsec = helper_func.CoordTools.transform_pix2world_scale(
                         length_in_pix=best_gauss_dict['mean_sig'], wcs=obs_cutout_dict['%s_img_cutout' % band].wcs)
+                    print(mean_sig_arcsec)
+                    print(best_gauss_dict['mean_sig'])
+
+                    # exit()
 
                     # get a dummy gaussian
                     n_pixels_in_bkg_rad = int(helper_func.CoordTools.transform_world2pix_scale(
@@ -1574,19 +1576,27 @@ class PhotLab(ObsAccess):
                         amp=best_gauss_dict['mean_amp'], mu=mean_mu_arcsec,
                         sig=mean_sig_arcsec, x_data=dummy_rad_arcsec)
 
-                    print('mean_sig_arcsec ', mean_sig_arcsec)
                     # correction factor
                     corr_fact, too_extended_flag = phot_tools.PSFTools.get_apert_gauss_corr_fact(
                         band=band, instrument=instrument_list[band_idx], apert_rad=phot_aperture_arcsec_list[band_idx],
                         std=mean_sig_arcsec)
 
+                    # corr_fact = 1
+                    # too_extended_flag = False
+
                 else:
                     corr_fact = None
 
                 # get galactic reddening correction
+
+                if (instrument_list[band_idx] == 'custom_gauss') & (obs_list[band_idx] == 'hst'):
+                    original_instrument = ObsTools.get_hst_instrument(band=band, target=self.phot_target_name)
+                else:
+                    original_instrument = instrument_list[band_idx]
+
                 fore_ground_ext = DustTools.get_target_gal_ext_band(
                     target=self.phot_target_name, band=band, obs=obs_list[band_idx],
-                    instrument=instrument_list[band_idx], ext_law='G23')
+                    instrument=original_instrument, ext_law='G23')
 
                 gal_red_corr_fact = 10 ** (fore_ground_ext / 2.5)
 
@@ -1637,7 +1647,6 @@ class PhotLab(ObsAccess):
                     # plot all the gaussians
 
                     n_colors = len(rad_profile_dict['slit_profile_dict']['list_angle_idx'])
-
 
                     for idx in rad_profile_dict['slit_profile_dict']['list_angle_idx']:
                         profile_color = plotting_params.color_list_rainbow(idx / n_colors)
@@ -1781,13 +1790,13 @@ class PhotLab(ObsAccess):
                     # plot sed point
                     mean_band_wavelength = ObsTools.get_obs_wave(
                         target=target_name_list[band_idx], band=band, obs=obs_list[band_idx],
-                        instrument=instrument_list[band_idx], wave_estimator='mean_wave', unit='mu')
+                        instrument=original_instrument, wave_estimator='mean_wave', unit='mu')
                     min_band_wavelength = ObsTools.get_obs_wave(
                         target=target_name_list[band_idx], band=band, obs=obs_list[band_idx],
-                        instrument=instrument_list[band_idx], wave_estimator='min_wave', unit='mu')
+                        instrument=original_instrument, wave_estimator='min_wave', unit='mu')
                     max_band_wavelength = ObsTools.get_obs_wave(
                         target=target_name_list[band_idx], band=band, obs=obs_list[band_idx],
-                        instrument=instrument_list[band_idx], wave_estimator='max_wave', unit='mu')
+                        instrument=original_instrument, wave_estimator='max_wave', unit='mu')
 
                     # plot SED point only when there is a detection
 
