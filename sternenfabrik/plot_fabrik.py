@@ -8,6 +8,7 @@ from astropy.visualization import SqrtStretch, LogStretch
 from astropy.visualization.mpl_normalize import ImageNormalize
 import matplotlib.pyplot as plt
 from matplotlib.colors import Normalize, LogNorm
+from regions import EllipseSkyRegion
 from werkzeugkiste import helper_func, phys_params, phot_tools
 from malkasten import plotting_tools
 from obszugang import ObsTools, obs_info, ClusterCatAccess
@@ -903,13 +904,12 @@ class PlotFabrik(PhotLab):
         plotting_tools.WCSPlottingTools.arr_axis_params(
             ax=ax_zoom_in_2to7, ra_tick_label=False, dec_tick_label=False, ra_axis_label=' ', dec_axis_label=' ')
 
-    def plot_radio_cont_zoom_in(self, fig, fig_dict, ra, dec):
+    def plot_radio_cont_zoom_in(self, fig, fig_dict, ra, dec, radio_ellipse_dict=None):
 
         # load X-ray data
         self.load_radio_data(band='L', map='tt0')
         self.load_radio_data(band='L', map='alpha')
         # get cutout
-        print(self.radio_data.keys())
 
         cutout_tt0 = helper_func.CoordTools.get_img_cutout(
             img=self.radio_data['L_tt0_data_img'], wcs=self.radio_data['L_tt0_wcs_img'],
@@ -984,6 +984,22 @@ class PlotFabrik(PhotLab):
             ax=ax_zoom_in_tt0, ra_tick_label=False, dec_tick_label=False, ra_axis_label=' ', dec_axis_label=' ')
         plotting_tools.WCSPlottingTools.arr_axis_params(
             ax=ax_zoom_in_alpha, ra_tick_label=False, dec_tick_label=False, ra_axis_label=' ', dec_axis_label=' ')
+
+        if radio_ellipse_dict is not None:
+
+            ellipse_sky = EllipseSkyRegion(center=SkyCoord(ra=ra*u.deg, dec=dec*u.deg), width=radio_ellipse_dict['min_axis']*u.deg,
+
+                                   height=radio_ellipse_dict['maj_axis']*u.deg, angle=radio_ellipse_dict['angle']*u.deg)
+
+            ellipse_pixel_zoom_in = ellipse_sky.to_pixel(cutout_tt0.wcs)
+
+            patch = ellipse_pixel_zoom_in.as_artist(facecolor=radio_ellipse_dict['facecolor'],
+                                                    edgecolor=radio_ellipse_dict['edgecolor'], linewidth=radio_ellipse_dict['linewidth'], linestyle='-')
+
+            ax_zoom_in_tt0.add_patch(patch)
+
+
+
 
     def get_rgb_zoom_in(self, ra, dec, cutout_size, band_red, band_green, band_blue, ref_filter='blue', **kwargs):
         """
@@ -2548,7 +2564,7 @@ class PlotFabrik(PhotLab):
 
         return fig
 
-    def phangs_holistic_viewer3(self, ra, dec, plot_rad_profile=False, plot_sed=False):
+    def phangs_holistic_viewer3(self, ra, dec, plot_rad_profile=False, plot_sed=False, radio_ellipse_dict=None):
         """
 
         This method creates a holistic inspection plot for one coordinate.
@@ -2572,7 +2588,7 @@ class PlotFabrik(PhotLab):
         self.plot_x_ray_zoom_in(fig=fig, fig_dict=plot_params.holistic_viewer3_param_dic, ra=ra, dec=dec)
 
         # add radio
-        self.plot_radio_cont_zoom_in(fig=fig, fig_dict=plot_params.holistic_viewer3_param_dic, ra=ra, dec=dec)
+        self.plot_radio_cont_zoom_in(fig=fig, fig_dict=plot_params.holistic_viewer3_param_dic, ra=ra, dec=dec, radio_ellipse_dict=radio_ellipse_dict)
 
 
         # plot postage stamps
