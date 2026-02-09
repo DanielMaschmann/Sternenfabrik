@@ -555,11 +555,11 @@ class PlotFabrik(PhotLab):
 
                 # check if object is covered
                 if (self.check_coords_covered_by_band(
-                        obs=obs, ra=ra, dec=dec, band=band_list[0], instrument=instrument) &
+                        obs=obs, ra=ra, dec=dec, band=band_list[0], instrument=instrument,  max_dist_dist2hull_arcsec=0.5) &
                         self.check_coords_covered_by_band(
-                            obs=obs, ra=ra, dec=dec, band=band_list[1], instrument=instrument) &
+                            obs=obs, ra=ra, dec=dec, band=band_list[1], instrument=instrument,  max_dist_dist2hull_arcsec=0.5) &
                         self.check_coords_covered_by_band(
-                            obs=obs, ra=ra, dec=dec, band=band_list[2], instrument=instrument)):
+                            obs=obs, ra=ra, dec=dec, band=band_list[2], instrument=instrument,  max_dist_dist2hull_arcsec=0.5)):
                     self.load_obs_bands(band_list=band_list, flux_unit='MJy/sr', load_err=False)
 
                     img_zoom_in, wcs_zoom_in = self.get_rgb_zoom_in(ra=ra, dec=dec,
@@ -1495,19 +1495,19 @@ class PlotFabrik(PhotLab):
 
     def plot_img_stamps_all(self, fig, fig_dict, ra, dec, plot_rad_profile=True, individual_band_list=None):
 
-        prelim_hst_broad_band_list = self.get_covered_hst_broad_band_list(ra=ra, dec=dec)
-        prelim_hst_ha_band = self.get_covered_hst_ha_band(ra=ra, dec=dec)
-        prelim_nircam_band_list = self.get_covered_nircam_band_list(ra=ra, dec=dec)
-        prelim_miri_band_list = self.get_covered_miri_band_list(ra=ra, dec=dec)
+        prelim_hst_broad_band_list = self.get_covered_hst_broad_band_list(ra=ra, dec=dec, max_dist_dist2hull_arcsec=0.5)
+        prelim_hst_ha_band = self.get_covered_hst_ha_band(ra=ra, dec=dec, max_dist_dist2hull_arcsec=0.5)
+        prelim_nircam_band_list = self.get_covered_nircam_band_list(ra=ra, dec=dec, max_dist_dist2hull_arcsec=0.5)
+        prelim_miri_band_list = self.get_covered_miri_band_list(ra=ra, dec=dec, max_dist_dist2hull_arcsec=0.5)
 
-        prelim_band_list = self.get_covered_hst_broad_band_list(ra=ra, dec=dec)
+        prelim_band_list = self.get_covered_hst_broad_band_list(ra=ra, dec=dec, max_dist_dist2hull_arcsec=0.5)
 
         # check if H-alpha is available
         if ObsTools.check_hst_ha_cont_sub_obs(target=self.phot_hst_ha_cont_sub_target_name):
             if self.check_coords_covered_by_band(obs="hst", ra=ra, dec=dec,
                                                  band=ObsTools.get_hst_ha_band(
                                                          target=self.phot_hst_ha_cont_sub_target_name),
-                                                 max_dist_dist2hull_arcsec=2):
+                                                 max_dist_dist2hull_arcsec=0.5):
                 prelim_band_list += [prelim_hst_ha_band]
                 # check if Ha- continuum subtracted image is available
                 if self.phot_hst_ha_cont_sub_target_name in obs_info.hst_ha_cont_sub_dict.keys():
@@ -1643,7 +1643,7 @@ class PlotFabrik(PhotLab):
             if self.check_coords_covered_by_band(
                     obs="hst", ra=ra, dec=dec,
                     band=ObsTools.get_hst_ha_band(target=self.phot_hst_target_name),
-                    max_dist_dist2hull_arcsec=2):
+                    max_dist_dist2hull_arcsec=0.5):
                 hst_ha_band = ObsTools.get_hst_ha_band(target=self.phot_hst_target_name)
                 if plot_rad_profile:
                     ax_rad_profile = plotting_tools.AxisTools.add_panel_axis(
