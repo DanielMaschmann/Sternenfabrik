@@ -25,14 +25,16 @@ class PhotLab(ObsAccess):
     def __init__(self, target_name=None, phot_hst_target_name=None, phot_hst_ha_cont_sub_target_name=None,
                  phot_nircam_target_name=None, phot_miri_target_name=None, phot_astrosat_target_name=None,
                  x_target_name=None, radio_target_name=None,
-                 nircam_data_ver='v1p1p1', miri_data_ver='v1p1p1', astrosat_data_ver='v1p0'):
+                 nircam_data_ver='v1p1p1', miri_data_ver='v1p1p1', astrosat_data_ver='v1p0',
+                 nirspec_data_ver=None, miri_mrs_data_ver=None):
         ObsAccess.__init__(
             self, target_name=target_name, phot_hst_target_name=phot_hst_target_name,
             phot_hst_ha_cont_sub_target_name=phot_hst_ha_cont_sub_target_name,
             phot_nircam_target_name=phot_nircam_target_name, phot_miri_target_name=phot_miri_target_name,
             phot_astrosat_target_name=phot_astrosat_target_name, x_target_name=x_target_name,
             radio_target_name=radio_target_name,
-            nircam_data_ver=nircam_data_ver, miri_data_ver=miri_data_ver, astrosat_data_ver=astrosat_data_ver)
+            nircam_data_ver=nircam_data_ver, miri_data_ver=miri_data_ver, astrosat_data_ver=astrosat_data_ver,
+            nirspec_data_ver=nirspec_data_ver,  miri_mrs_data_ver=miri_mrs_data_ver)
 
     def get_aperture_radii_and_scales(self, band_list, instrument_list, obs_list, roi_arcsec, bkg_roi_rad_in_arcsec,
                                       bkg_roi_rad_out_arcsec):
