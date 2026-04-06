@@ -1534,10 +1534,6 @@ class PhotLab(ObsAccess):
                         length_in_pix=best_gauss_dict['mean_mu'], wcs=obs_cutout_dict['%s_img_cutout' % band].wcs)
                     mean_sig_arcsec = helper_func.CoordTools.transform_pix2world_scale(
                         length_in_pix=best_gauss_dict['mean_sig'], wcs=obs_cutout_dict['%s_img_cutout' % band].wcs)
-                    print(mean_sig_arcsec)
-                    print(best_gauss_dict['mean_sig'])
-
-                    # exit()
 
                     # get a dummy gaussian
                     n_pixels_in_bkg_rad = int(helper_func.CoordTools.transform_world2pix_scale(
@@ -1551,15 +1547,19 @@ class PhotLab(ObsAccess):
                         sig=mean_sig_arcsec, x_data=dummy_rad_arcsec)
 
                     # correction factor
-                    corr_fact, too_extended_flag = phot_tools.PSFTools.get_apert_gauss_corr_fact(
-                        band=band, instrument=instrument_list[band_idx], apert_rad=phot_aperture_arcsec_list[band_idx],
-                        std=mean_sig_arcsec)
-
-                    # corr_fact = 1
-                    # too_extended_flag = False
+                    if np.isnan(mean_sig_arcsec):
+                        corr_fact = 1
+                        too_extended_flag = False
+                        profile_corrupted = True
+                    else:
+                        corr_fact, too_extended_flag = phot_tools.PSFTools.get_apert_gauss_corr_fact(
+                            band=band, instrument=instrument_list[band_idx], apert_rad=phot_aperture_arcsec_list[band_idx],
+                            std=mean_sig_arcsec)
+                        profile_corrupted = False
 
                 else:
                     corr_fact = None
+                    profile_corrupted = False
 
                 # get galactic reddening correction
 
@@ -1728,7 +1728,7 @@ class PhotLab(ObsAccess):
                                               [0, best_gauss_dict['mean_amp'] * 0.5], color='tab:blue', linestyle='--',
                                               linewidth=4)
 
-                    if not neg_flx_in_apert:
+                    if (not neg_flx_in_apert) & (not profile_corrupted):
                         ax_slit_profiles.plot(dummy_rad_arcsec, mean_gauss, linewidth=5, color='k', linestyle='--')
 
                         plotting_tools.AxisTools.frame2axis(ax=ax_slit_profiles, color='k', line_width=3)
@@ -1853,9 +1853,9 @@ class PhotLab(ObsAccess):
                 # plt.subplots_adjust(left=0.05, bottom=0.01, right=0.99, top=0.99, wspace=0.01, hspace=0.05)
                 if not os.path.isdir(plot_output_path):
                     os.makedirs(plot_output_path)
-                fig.savefig(plot_output_path + 'compact_src_photmetry_%s_%i.png' % (self.phot_target_name, obj_idx))
+                fig.savefig(plot_output_path + 'compact_src_photmetry_%s_%s.png' % (self.phot_target_name, obj_idx))
                 if save_as_pdf:
-                    fig.savefig(plot_output_path + 'compact_src_photmetry_%s_%i.pdf' % (self.phot_target_name, obj_idx))
+                    fig.savefig(plot_output_path + 'compact_src_photmetry_%s_%s.pdf' % (self.phot_target_name, obj_idx))
                 plt.close(fig)
 
         return flux_table

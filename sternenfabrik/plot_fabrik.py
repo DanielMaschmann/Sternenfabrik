@@ -9,7 +9,7 @@ from astropy.visualization.mpl_normalize import ImageNormalize
 import matplotlib.pyplot as plt
 from matplotlib.colors import Normalize, LogNorm
 from regions import EllipseSkyRegion
-from werkzeugkiste import helper_func, phys_params, phot_tools
+from werkzeugkiste import helper_func, phys_params, phot_tools, spec_tools
 from malkasten import plotting_tools
 from obszugang import ObsTools, obs_info, ClusterCatAccess
 from sternenfabrik import plot_params
@@ -270,17 +270,25 @@ class PlotFabrik(PhotLab):
                                  ObsTools.filter_name2hst_band(target=self.phot_hst_target_name,
                                                                            filter_name=fig_dict[
                                                                                '%s_blue_band' % obs_type])]
+                    instrument = None
                 else:
+                    if obs_type in ['nircam', 'nircam1', 'nircam2', 'nircam3', 'nircam4', 'nircam5']:
+                        obs = 'jwst'
+                        instrument = 'nircam'
+                    elif obs_type in ['miri', 'miri1', 'miri2']:
+                        obs = 'jwst'
+                        instrument = 'miri'
+
                     band_list = [fig_dict['%s_red_band' % obs_type], fig_dict['%s_green_band' % obs_type],
                                  fig_dict['%s_blue_band' % obs_type]]
 
                 # check if object is covered
                 if (self.check_coords_covered_by_band(
-                        telescope=obs, ra=ra, dec=dec, band=band_list[0], max_dist_dist2hull_arcsec=2) &
+                        obs=obs, instrument=instrument, ra=ra, dec=dec, band=band_list[0], max_dist_dist2hull_arcsec=2) &
                         self.check_coords_covered_by_band(
-                            telescope=obs, ra=ra, dec=dec, band=band_list[1], max_dist_dist2hull_arcsec=2) &
+                            obs=obs, instrument=instrument, ra=ra, dec=dec, band=band_list[1], max_dist_dist2hull_arcsec=2) &
                         self.check_coords_covered_by_band(
-                            telescope=obs, ra=ra, dec=dec, band=band_list[2], max_dist_dist2hull_arcsec=2)):
+                            obs=obs, instrument=instrument, ra=ra, dec=dec, band=band_list[2], max_dist_dist2hull_arcsec=2)):
                     self.load_obs_bands(band_list=band_list, flux_unit='MJy/sr', load_err=False)
 
                     img_zoom_in, wcs_zoom_in = self.get_rgb_zoom_in(ra=ra, dec=dec,
@@ -557,11 +565,11 @@ class PlotFabrik(PhotLab):
 
                 # check if object is covered
                 if (self.check_coords_covered_by_band(
-                        obs=obs, ra=ra, dec=dec, band=band_list[0], instrument=instrument,  max_dist_dist2hull_arcsec=0.5) &
+                        obs=obs, ra=ra, dec=dec, band=band_list[0], instrument=instrument,  max_dist_dist2hull_arcsec=0.0001) &
                         self.check_coords_covered_by_band(
-                            obs=obs, ra=ra, dec=dec, band=band_list[1], instrument=instrument,  max_dist_dist2hull_arcsec=0.5) &
+                            obs=obs, ra=ra, dec=dec, band=band_list[1], instrument=instrument,  max_dist_dist2hull_arcsec=0.0001) &
                         self.check_coords_covered_by_band(
-                            obs=obs, ra=ra, dec=dec, band=band_list[2], instrument=instrument,  max_dist_dist2hull_arcsec=0.5)):
+                            obs=obs, ra=ra, dec=dec, band=band_list[2], instrument=instrument,  max_dist_dist2hull_arcsec=0.0001)):
                     self.load_obs_bands(band_list=band_list, flux_unit='MJy/sr', load_err=False)
 
                     img_zoom_in, wcs_zoom_in = self.get_rgb_zoom_in(ra=ra, dec=dec,
@@ -1082,7 +1090,7 @@ class PlotFabrik(PhotLab):
         band_list = self.get_covered_hst_broad_band_list(ra=ra, dec=dec)
         # check if H-alpha is available
         if ObsTools.check_hst_ha_cont_sub_obs(target=self.phot_hst_ha_cont_sub_target_name):
-            if self.check_coords_covered_by_band(telescope="hst", ra=ra, dec=dec,
+            if self.check_coords_covered_by_band(obs="hst", ra=ra, dec=dec,
                                                  band=ObsTools.get_hst_ha_band(
                                                          target=self.phot_hst_ha_cont_sub_target_name),
                                                  max_dist_dist2hull_arcsec=2):
@@ -1183,7 +1191,7 @@ class PlotFabrik(PhotLab):
         # add h alpha
         if ObsTools.check_hst_ha_cont_sub_obs(target=self.phot_hst_target_name):
             if self.check_coords_covered_by_band(
-                    telescope="hst", ra=ra, dec=dec,
+                    obs="hst", ra=ra, dec=dec,
                     band=ObsTools.get_hst_ha_band(target=self.phot_hst_target_name),
                     max_dist_dist2hull_arcsec=2):
                 hst_ha_band = ObsTools.get_hst_ha_band(target=self.phot_hst_target_name)
@@ -2482,8 +2490,7 @@ class PlotFabrik(PhotLab):
 
 
 
-    @staticmethod
-    def phangs_holistic_viewer1(ra, dec, target_name=None, phot_visual_access=None,
+    def phangs_holistic_viewer1(self, ra, dec,
                                 plot_rad_profile=False, plot_sed=False,
                                 plot_muse=True, ppxf_fit_dict=None):
         """
@@ -2497,39 +2504,39 @@ class PlotFabrik(PhotLab):
         # create figure
         fig = plotting_tools.AxisTools.init_fig(fig_dict=plot_params.holistic_viewer1_param_dic)
 
-        if phot_visual_access is None:
-            phot_visual_access = PhotVisualizer(target_name=target_name)
-
         # create the overview plot
-        phot_visual_access.plot_hst_overview_panel(fig=fig, fig_dict=plot_params.holistic_viewer1_param_dic,
+        self.plot_hst_overview_panel(fig=fig, fig_dict=plot_params.holistic_viewer1_param_dic,
                                                    ra_box=ra, dec_box=dec)
 
         # plot environment zoom in panels
-        phot_visual_access.plot_zoom_in_panel_group(fig=fig, fig_dict=plot_params.holistic_viewer1_param_dic,
+        self.plot_zoom_in_panel_group(fig=fig, fig_dict=plot_params.holistic_viewer1_param_dic,
                                                     ra=ra, dec=dec)
 
         # plot postage stamps
-        phot_visual_access.plot_img_stamps(fig=fig, fig_dict=plot_params.holistic_viewer1_param_dic, ra=ra, dec=dec,
+        self.plot_img_stamps(fig=fig, fig_dict=plot_params.holistic_viewer1_param_dic, ra=ra, dec=dec,
                                            plot_rad_profile=plot_rad_profile)
 
         # plot sed estimation
         if plot_sed:
-            phot_visual_access.plot_sed_panel(fig=fig, fig_dict=plot_params.holistic_viewer1_param_dic, ra=ra, dec=dec)
+            self.plot_sed_panel(fig=fig, fig_dict=plot_params.holistic_viewer1_param_dic, ra=ra, dec=dec)
 
         # # get_EW estimation
-        # phot_visual_access.compute_ha_ew(fig=fig, fig_dict=plot_params.holistic_viewer1_param_dic, ra=ra, dec=dec)
+        # self.compute_ha_ew(fig=fig, fig_dict=plot_params.holistic_viewer1_param_dic, ra=ra, dec=dec)
 
         # # get MUSE spectrum from region
         if plot_muse:
             if ppxf_fit_dict is None:
-                rad_arcsec = phangs_info.muse_obs_res_dict[phot_visual_access.spec_target_name]['copt_res'] / 2
-                spec_dict = phot_visual_access.extract_muse_spec_circ_app(ra=ra, dec=dec,
+                rad_arcsec = obs_info.muse_obs_res_dict[self.spec_target_name]['copt_res'] / 2
+                spec_dict = self.extract_muse_spec_circ_app(ra=ra, dec=dec,
                                                                           rad_arcsec=rad_arcsec, wave_range=None,
                                                                           res='copt')
-                ppxf_fit_dict = spec_tools.SpecTools.fit_ppxf2spec(spec_dict=spec_dict,
-                                                                   target=phot_visual_access.spec_target_name,
+
+
+
+                ppxf_fit_dict = spec_tools.PpxfTools.fit_ppxf2spec(spec_dict=spec_dict,
+                                                                   target=self.spec_target_name,
                                                                    sps_name='fsps', age_range=None, metal_range=None)
-            phot_visual_access.plot_muse_spec(fig=fig, fig_dict=plot_params.holistic_viewer1_param_dic, ra=ra, dec=dec,
+            self.plot_muse_spec(fig=fig, fig_dict=plot_params.holistic_viewer1_param_dic, ra=ra, dec=dec,
                                               ppxf_fit_dict=ppxf_fit_dict)
 
         return fig
