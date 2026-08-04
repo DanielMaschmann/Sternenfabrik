@@ -25,14 +25,15 @@ class PlotFabrik(PhotLab):
                  phot_nircam_target_name=None, phot_miri_target_name=None, phot_astrosat_target_name=None,
                  x_target_name=None, radio_target_name=None,
                  nircam_data_ver='v1p1p1', miri_data_ver='v1p1p1', astrosat_data_ver='v1p0',
-                 nirspec_data_ver=None, miri_mrs_data_ver=None):
+                 nirspec_data_ver=None, miri_mrs_data_ver=None, nircam_program_id=2107, miri_program_id=2107):
         PhotLab.__init__(self, target_name=target_name, phot_hst_target_name=phot_hst_target_name,
             phot_hst_ha_cont_sub_target_name=phot_hst_ha_cont_sub_target_name,
             phot_nircam_target_name=phot_nircam_target_name, phot_miri_target_name=phot_miri_target_name,
             phot_astrosat_target_name=phot_astrosat_target_name, x_target_name=x_target_name,
                          radio_target_name=radio_target_name,
             nircam_data_ver=nircam_data_ver, miri_data_ver=miri_data_ver, astrosat_data_ver=astrosat_data_ver,
-                         nirspec_data_ver=nirspec_data_ver,  miri_mrs_data_ver=miri_mrs_data_ver)
+                         nirspec_data_ver=nirspec_data_ver,  miri_mrs_data_ver=miri_mrs_data_ver,
+            nircam_program_id=nircam_program_id, miri_program_id=miri_program_id)
 
     def plot_hst_overview_panel(self, fig, fig_dict, ra_box=None, dec_box=None):
         """
@@ -184,6 +185,178 @@ class PlotFabrik(PhotLab):
 
         hst_rgb = plotting_tools.ImgTools.get_rgb_img(data_r=img_data_red, data_g=img_data_green, data_b=img_data_blue,
                                                       **rgb_img_kwargs)
+
+        return hst_rgb, new_wcs
+
+    def get_target_overview_4color_rgb_img(self,
+                                    band_1, band_2, band_3, band_4,
+                                    obs_band_1='hst', obs_band_2='hst', obs_band_3='hst', obs_band_4='hst',
+                                    ref_filter='band_3',
+                                    overview_img_size=(500, 500), **rgb_img_kwargs):
+        """
+        Function to create an overview RGB image of PHANGS HST observations
+
+        Parameters
+        ----------
+        band_1, band_2, band_3, band_4 : str
+            Can be specified to any hst band
+        ref_filter: str
+            Band which is used for the image limits. can be red green or blue
+        overview_img_size : tuple
+            denotes the shape of the new image
+
+        Returns
+        -------
+        rgb_image: ``numpy.ndarray``
+        wcs: ``astropy.wcs.WCS``
+        """
+
+        # band list need to be loaded
+        self.load_obs_bands(band_list=[band_1, band_2, band_3, band_4], flux_unit='MJy/sr', load_err=False)
+        # get overview image
+
+        non_zero_elements = np.where(getattr(self, '%s_bands_data' % eval('obs_%s' % ref_filter))[
+                                         '%s_data_img' % eval(ref_filter)] != 0)
+
+        min_index_ra_axis_x_val = int(np.mean(non_zero_elements[1][non_zero_elements[1] ==
+                                                                   np.min(non_zero_elements[1])]))
+        min_index_ra_axis_y_val = int(np.mean(non_zero_elements[0][non_zero_elements[1] ==
+                                                                   np.min(non_zero_elements[1])]))
+        max_index_ra_axis_x_val = int(np.mean(non_zero_elements[1][non_zero_elements[1] ==
+                                                                   np.max(non_zero_elements[1])]))
+        max_index_ra_axis_y_val = int(np.mean(non_zero_elements[0][non_zero_elements[1] ==
+                                                                   np.max(non_zero_elements[1])]))
+        min_index_dec_axis_x_val = int(np.mean(non_zero_elements[1][non_zero_elements[0] ==
+                                                                    np.min(non_zero_elements[0])]))
+        min_index_dec_axis_y_val = int(np.mean(non_zero_elements[0][non_zero_elements[0] ==
+                                                                    np.min(non_zero_elements[0])]))
+        max_index_dec_axis_x_val = int(np.mean(non_zero_elements[1][non_zero_elements[0] ==
+                                                                    np.max(non_zero_elements[0])]))
+        max_index_dec_axis_y_val = int(np.mean(non_zero_elements[0][non_zero_elements[0] ==
+                                                                    np.max(non_zero_elements[0])]))
+
+        ra_max = getattr(self, '%s_bands_data' % eval('obs_%s' % ref_filter))[
+            '%s_wcs_img' % eval(ref_filter)].pixel_to_world(
+            min_index_ra_axis_x_val, min_index_ra_axis_y_val).ra.value
+        ra_min = getattr(self, '%s_bands_data' % eval('obs_%s' % ref_filter))[
+            '%s_wcs_img' % eval(ref_filter)].pixel_to_world(
+            max_index_ra_axis_x_val, max_index_ra_axis_y_val).ra.value
+
+        dec_min = getattr(self, '%s_bands_data' % eval('obs_%s' % ref_filter))[
+            '%s_wcs_img' % eval(ref_filter)].pixel_to_world(
+            min_index_dec_axis_x_val, min_index_dec_axis_y_val).dec.value
+        dec_max = getattr(self, '%s_bands_data' % eval('obs_%s' % ref_filter))[
+            '%s_wcs_img' % eval(ref_filter)].pixel_to_world(
+            max_index_dec_axis_x_val, max_index_dec_axis_y_val).dec.value
+
+        new_wcs = helper_func.CoordTools.construct_wcs(ra_min=ra_min, ra_max=ra_max, dec_min=dec_max, dec_max=dec_min,
+                                                       img_shape=overview_img_size, quadratic_image=True)
+
+        img_data_band_1 = helper_func.CoordTools.reproject_image(
+            data=getattr(self, '%s_bands_data' % obs_band_1)['%s_data_img' % band_1],
+            wcs=getattr(self, '%s_bands_data' % obs_band_1)['%s_wcs_img' % band_1],
+            new_wcs=new_wcs, new_shape=overview_img_size)
+        img_data_band_2 = helper_func.CoordTools.reproject_image(
+            data=getattr(self, '%s_bands_data' % obs_band_2)['%s_data_img' % band_2],
+            wcs=getattr(self, '%s_bands_data' % obs_band_2)['%s_wcs_img' % band_2],
+            new_wcs=new_wcs, new_shape=overview_img_size)
+        img_data_band_3 = helper_func.CoordTools.reproject_image(
+            data=getattr(self, '%s_bands_data' % obs_band_3)['%s_data_img' % band_3],
+            wcs=getattr(self, '%s_bands_data' % obs_band_3)['%s_wcs_img' % band_3],
+            new_wcs=new_wcs, new_shape=overview_img_size)
+        img_data_band_4 = helper_func.CoordTools.reproject_image(
+            data=getattr(self, '%s_bands_data' % obs_band_4)['%s_data_img' % band_4],
+            wcs=getattr(self, '%s_bands_data' % obs_band_4)['%s_wcs_img' % band_4],
+            new_wcs=new_wcs, new_shape=overview_img_size)
+
+        img_data_band_1[img_data_band_1 == 0] = np.nan
+        img_data_band_2[img_data_band_2 == 0] = np.nan
+        img_data_band_3[img_data_band_3 == 0] = np.nan
+        img_data_band_4[img_data_band_4 == 0] = np.nan
+
+        hst_rgb = plotting_tools.ImgTools.get_4color_img(data1=img_data_band_1, data2=img_data_band_2,
+                                                         data3=img_data_band_3, data4=img_data_band_4, **rgb_img_kwargs)
+
+        return hst_rgb, new_wcs
+
+    def get_target_overview_2color_rgb_img(self,
+                                    band_1, band_2,
+                                    obs_band_1='hst', obs_band_2='hst',
+                                    ref_filter='band_1',
+                                    overview_img_size=(500, 500), **rgb_img_kwargs):
+        """
+        Function to create an overview RGB image of PHANGS HST observations
+
+        Parameters
+        ----------
+        band_1, band_2 : str
+            Can be specified to any hst band
+        ref_filter: str
+            Band which is used for the image limits. can be red green or blue
+        overview_img_size : tuple
+            denotes the shape of the new image
+
+        Returns
+        -------
+        rgb_image: ``numpy.ndarray``
+        wcs: ``astropy.wcs.WCS``
+        """
+
+        # band list need to be loaded
+        self.load_obs_bands(band_list=[band_1, band_2], flux_unit='MJy/sr', load_err=False)
+        # get overview image
+
+        non_zero_elements = np.where(getattr(self, '%s_bands_data' % eval('obs_%s' % ref_filter))[
+                                         '%s_data_img' % eval(ref_filter)] != 0)
+
+        min_index_ra_axis_x_val = int(np.mean(non_zero_elements[1][non_zero_elements[1] ==
+                                                                   np.min(non_zero_elements[1])]))
+        min_index_ra_axis_y_val = int(np.mean(non_zero_elements[0][non_zero_elements[1] ==
+                                                                   np.min(non_zero_elements[1])]))
+        max_index_ra_axis_x_val = int(np.mean(non_zero_elements[1][non_zero_elements[1] ==
+                                                                   np.max(non_zero_elements[1])]))
+        max_index_ra_axis_y_val = int(np.mean(non_zero_elements[0][non_zero_elements[1] ==
+                                                                   np.max(non_zero_elements[1])]))
+        min_index_dec_axis_x_val = int(np.mean(non_zero_elements[1][non_zero_elements[0] ==
+                                                                    np.min(non_zero_elements[0])]))
+        min_index_dec_axis_y_val = int(np.mean(non_zero_elements[0][non_zero_elements[0] ==
+                                                                    np.min(non_zero_elements[0])]))
+        max_index_dec_axis_x_val = int(np.mean(non_zero_elements[1][non_zero_elements[0] ==
+                                                                    np.max(non_zero_elements[0])]))
+        max_index_dec_axis_y_val = int(np.mean(non_zero_elements[0][non_zero_elements[0] ==
+                                                                    np.max(non_zero_elements[0])]))
+
+        ra_max = getattr(self, '%s_bands_data' % eval('obs_%s' % ref_filter))[
+            '%s_wcs_img' % eval(ref_filter)].pixel_to_world(
+            min_index_ra_axis_x_val, min_index_ra_axis_y_val).ra.value
+        ra_min = getattr(self, '%s_bands_data' % eval('obs_%s' % ref_filter))[
+            '%s_wcs_img' % eval(ref_filter)].pixel_to_world(
+            max_index_ra_axis_x_val, max_index_ra_axis_y_val).ra.value
+
+        dec_min = getattr(self, '%s_bands_data' % eval('obs_%s' % ref_filter))[
+            '%s_wcs_img' % eval(ref_filter)].pixel_to_world(
+            min_index_dec_axis_x_val, min_index_dec_axis_y_val).dec.value
+        dec_max = getattr(self, '%s_bands_data' % eval('obs_%s' % ref_filter))[
+            '%s_wcs_img' % eval(ref_filter)].pixel_to_world(
+            max_index_dec_axis_x_val, max_index_dec_axis_y_val).dec.value
+
+        new_wcs = helper_func.CoordTools.construct_wcs(ra_min=ra_min, ra_max=ra_max, dec_min=dec_max, dec_max=dec_min,
+                                                       img_shape=overview_img_size, quadratic_image=True)
+
+        img_data_band_1 = helper_func.CoordTools.reproject_image(
+            data=getattr(self, '%s_bands_data' % obs_band_1)['%s_data_img' % band_1],
+            wcs=getattr(self, '%s_bands_data' % obs_band_1)['%s_wcs_img' % band_1],
+            new_wcs=new_wcs, new_shape=overview_img_size)
+        img_data_band_2 = helper_func.CoordTools.reproject_image(
+            data=getattr(self, '%s_bands_data' % obs_band_2)['%s_data_img' % band_2],
+            wcs=getattr(self, '%s_bands_data' % obs_band_2)['%s_wcs_img' % band_2],
+            new_wcs=new_wcs, new_shape=overview_img_size)
+
+
+        img_data_band_1[img_data_band_1 == 0] = np.nan
+        img_data_band_2[img_data_band_2 == 0] = np.nan
+
+        hst_rgb = plotting_tools.ImgTools.get_2color_img(data1=img_data_band_1, data2=img_data_band_2, **rgb_img_kwargs)
 
         return hst_rgb, new_wcs
 
@@ -381,7 +554,7 @@ class PlotFabrik(PhotLab):
                 else:
                     continue
 
-                if self.check_coords_covered_by_band(telescope="astrosat", ra=ra, dec=dec, band=astrosat_band,
+                if self.check_coords_covered_by_band(obs="astrosat", ra=ra, dec=dec, band=astrosat_band,
                                                      max_dist_dist2hull_arcsec=2):
                     self.load_obs_bands(band_list=astrosat_band, flux_unit='erg A-1 cm-2 s-1', load_err=False)
                     cutout_dict = self.get_band_cutout_dict(ra_cutout=ra, dec_cutout=dec,
@@ -441,7 +614,7 @@ class PlotFabrik(PhotLab):
                                                      fig_dict['astrosat_cbar_height']])
                     plotting_tools.ColorBarTools.create_cbar(ax_cbar=ax_cbar_astrosat, cmap=fig_dict['astrosat_cmap'],
                                                              norm=norm,
-                                                             cbar_label=r'$\phi$ [erg $\AA^{-1}$ cm$^{-2}$ s$^{-2}$}',
+                                                             cbar_label=r'$\phi$ [erg $\AA^{-1}$ cm$^{-2}$ s$^{-2}$]',
                                                              fontsize=fig_dict['zoom_in_label_size'],
                                                              ticks=None, labelpad=2, tick_width=2,
                                                              orientation='vertical',
@@ -722,7 +895,7 @@ class PlotFabrik(PhotLab):
                                                      fig_dict['astrosat_cbar_height']])
                     plotting_tools.ColorBarTools.create_cbar(ax_cbar=ax_cbar_astrosat, cmap=fig_dict['astrosat_cmap'],
                                                              norm=norm,
-                                                             cbar_label=r'$\phi$ [erg $\AA^{-1}$ cm$^{-2}$ s$^{-2}$}',
+                                                             cbar_label=r'$\phi$ [erg $\AA^{-1}$ cm$^{-2}$ s$^{-2}$]',
                                                              fontsize=fig_dict['zoom_in_label_size'],
                                                              ticks=None, labelpad=2, tick_width=2,
                                                              orientation='vertical',
@@ -2534,7 +2707,7 @@ class PlotFabrik(PhotLab):
 
 
                 ppxf_fit_dict = spec_tools.PpxfTools.fit_ppxf2spec(spec_dict=spec_dict,
-                                                                   target=self.spec_target_name,
+                                                                   target_name=self.spec_target_name,
                                                                    sps_name='fsps', age_range=None, metal_range=None)
             self.plot_muse_spec(fig=fig, fig_dict=plot_params.holistic_viewer1_param_dic, ra=ra, dec=dec,
                                               ppxf_fit_dict=ppxf_fit_dict)
@@ -2559,6 +2732,8 @@ class PlotFabrik(PhotLab):
 
         # plot environment zoom in panels
         self.plot_zoom_in_panel_group_extra_nircam(fig=fig, fig_dict=plot_params.holistic_viewer2_param_dic,
+                                                   obs_list=['hst_broad_band', 'hst_ha', 'nircam1', 'nircam2', 'nircam3',
+                                                             'miri1'],
                                                     ra=ra, dec=dec)
 
         # plot postage stamps

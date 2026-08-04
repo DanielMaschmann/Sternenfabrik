@@ -311,9 +311,9 @@ holistic_viewer2_param_dic = {
     'hst_ha_green_band': 'B',
     'hst_ha_blue_band': 'U',
     # Nircam
-    'nircam_red_band':  'F200W',
-    'nircam_green_band': 'F164N',
-    'nircam_blue_band': 'F150W',
+    'nircam1_red_band':  'F200W',
+    'nircam1_green_band': 'F164N',
+    'nircam1_blue_band': 'F150W',
     # Nircam2
     'nircam2_red_band': 'F200W',
     'nircam2_green_band': 'F187N',
@@ -334,9 +334,9 @@ holistic_viewer2_param_dic = {
 
 
     # miri
-    'miri_red_band': 'F1130W',
-    'miri_green_band': 'F1000W',
-    'miri_blue_band': 'F770W',
+    'miri1_red_band': 'F1130W',
+    'miri1_green_band': 'F1000W',
+    'miri1_blue_band': 'F770W',
     # astrosat
     'astrosat_band': 'F148W',
     'astrosat_cbar_left_align': 0.92,

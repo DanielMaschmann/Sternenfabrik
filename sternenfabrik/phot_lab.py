@@ -12,7 +12,7 @@ from astropy.visualization import SqrtStretch, LogStretch
 from astropy.visualization.mpl_normalize import ImageNormalize
 from astropy.table import QTable, Table, Column
 from werkzeugkiste import helper_func, phys_params, phot_tools
-from obszugang import ObsAccess, ObsTools, ClusterCatAccess
+from obszugang import ObsAccess, ObsTools, ClusterCatAccess, PhangsSampleAccess
 from malkasten import plotting_tools, plotting_params
 from sternenstaub import DustTools
 
@@ -26,7 +26,7 @@ class PhotLab(ObsAccess):
                  phot_nircam_target_name=None, phot_miri_target_name=None, phot_astrosat_target_name=None,
                  x_target_name=None, radio_target_name=None,
                  nircam_data_ver='v1p1p1', miri_data_ver='v1p1p1', astrosat_data_ver='v1p0',
-                 nirspec_data_ver=None, miri_mrs_data_ver=None):
+                 nirspec_data_ver=None, miri_mrs_data_ver=None, nircam_program_id=2107, miri_program_id=2107):
         ObsAccess.__init__(
             self, target_name=target_name, phot_hst_target_name=phot_hst_target_name,
             phot_hst_ha_cont_sub_target_name=phot_hst_ha_cont_sub_target_name,
@@ -34,7 +34,8 @@ class PhotLab(ObsAccess):
             phot_astrosat_target_name=phot_astrosat_target_name, x_target_name=x_target_name,
             radio_target_name=radio_target_name,
             nircam_data_ver=nircam_data_ver, miri_data_ver=miri_data_ver, astrosat_data_ver=astrosat_data_ver,
-            nirspec_data_ver=nirspec_data_ver,  miri_mrs_data_ver=miri_mrs_data_ver)
+            nirspec_data_ver=nirspec_data_ver,  miri_mrs_data_ver=miri_mrs_data_ver,
+            nircam_program_id=nircam_program_id, miri_program_id=miri_program_id)
 
     def get_aperture_radii_and_scales(self, band_list, instrument_list, obs_list, roi_arcsec, bkg_roi_rad_in_arcsec,
                                       bkg_roi_rad_out_arcsec):
@@ -46,6 +47,7 @@ class PhotLab(ObsAccess):
         bkg_rad_out_arcsec_list = []
         fwhm_pix_list = []
         std_pix_list = []
+        fwhm_arcsec_list = []
 
         for band_idx, band in enumerate(band_list):
 
@@ -54,7 +56,7 @@ class PhotLab(ObsAccess):
             # fwhm_arcsec = psf_dict['gaussian_fwhm']
             fwhm_arcsec = phot_tools.PSFTools.get_obs_psf_fwhm(band=band, instrument=instrument_list[band_idx])
             std_arcsec = phot_tools.PSFTools.get_obs_psf_std(band=band, instrument=instrument_list[band_idx])
-
+            fwhm_arcsec_list.append(fwhm_arcsec)
             # get the standard aperture radii of the current band
             wcs = getattr(self, '%s_bands_data' % obs_list[band_idx])['%s_wcs_img' % band]
             fwhm_pix = helper_func.CoordTools.transform_world2pix_scale(length_in_arcsec=fwhm_arcsec, wcs=wcs).value
@@ -85,7 +87,7 @@ class PhotLab(ObsAccess):
             std_pix_list.append(std_pix)
 
         return (standard_phot_aperture_arcsec_list, phot_aperture_pix_list, phot_aperture_arcsec_list,
-                bkg_rad_in_arcsec_list, bkg_rad_out_arcsec_list, fwhm_pix_list, std_pix_list)
+                bkg_rad_in_arcsec_list, bkg_rad_out_arcsec_list, fwhm_pix_list, std_pix_list, fwhm_arcsec_list)
 
     def get_src_cutout_and_recenter(self, ra, dec, band, instrument, roi_arcsec, max_rad_arcsec, enlarging_fact_for_max_rad=3, cutout_size=None,
                                     re_centering=True):
@@ -292,6 +294,8 @@ class PhotLab(ObsAccess):
                                     include_astrosat=False,
 
                                     detect_sub_src=True,
+            sub_src_band_list=None,
+            sub_src_search_rad_arcsec=None,
                                     max_n_sub_src=10,
                                     psf_substructure_ratio_lim=2,
                                     substructure_roi_frac=0.9,
@@ -335,7 +339,7 @@ class PhotLab(ObsAccess):
                                   astrosat_target_name=self.phot_astrosat_target_name,))
 
         (standard_phot_aperture_arcsec_list, phot_aperture_pix_list, phot_aperture_arcsec_list,
-         bkg_rad_in_arcsec_list, bkg_rad_out_arcsec_list, fwhm_pix_list, std_pix_list) = (
+         bkg_rad_in_arcsec_list, bkg_rad_out_arcsec_list, fwhm_pix_list, std_pix_list, fwhm_arcsec_list) = (
             self.get_aperture_radii_and_scales(band_list=band_list, instrument_list=instrument_list, obs_list=obs_list,
                                                roi_arcsec=roi_arcsec, bkg_roi_rad_in_arcsec=bkg_roi_rad_in_arcsec,
                                                bkg_roi_rad_out_arcsec=bkg_roi_rad_out_arcsec))
@@ -344,9 +348,13 @@ class PhotLab(ObsAccess):
         sub_structure_colname_list = []
         search_substructure_flag_list = []
 
-        for band, fwhm_arcsec in zip(band_list, fwhm_pix_list):
+        if sub_src_band_list is None:
+            sub_src_band_list = band_list
+        if sub_src_search_rad_arcsec is None:
+            sub_src_search_rad_arcsec = roi_arcsec * substructure_roi_frac
+        for band, fwhm_arcsec in zip(band_list, fwhm_arcsec_list):
 
-            if roi_arcsec / (fwhm_arcsec / 2) > psf_substructure_ratio_lim:
+            if (roi_arcsec / (fwhm_arcsec / 2) > psf_substructure_ratio_lim) & (band in sub_src_band_list):
                 search_substructure_flag = True
                 # add sub structure names
                 for sub_structure_idx in range(max_n_sub_src):
@@ -493,14 +501,14 @@ class PhotLab(ObsAccess):
                         path_eff=True, path_eff_color='white')
 
                     # plot sed point
-                    mean_band_wavelength = ObsTools.get_phangs_telescope_wave(
-                        target=target_name_list[band_idx], band=band, telescope=obs_list[band_idx],
+                    mean_band_wavelength = ObsTools.get_obs_wave(
+                        target=target_name_list[band_idx], band=band, obs=obs_list[band_idx], instrument=instrument_list[band_idx],
                         wave_estimator='mean_wave', unit='mu')
-                    min_band_wavelength = ObsTools.get_phangs_telescope_wave(
-                        target=target_name_list[band_idx], band=band, telescope=obs_list[band_idx],
+                    min_band_wavelength = ObsTools.get_obs_wave(
+                        target=target_name_list[band_idx], band=band, obs=obs_list[band_idx], instrument=instrument_list[band_idx],
                         wave_estimator='min_wave', unit='mu')
-                    max_band_wavelength = ObsTools.get_phangs_telescope_wave(
-                        target=target_name_list[band_idx], band=band, telescope=obs_list[band_idx],
+                    max_band_wavelength = ObsTools.get_obs_wave(
+                        target=target_name_list[band_idx], band=band, obs=obs_list[band_idx], instrument=instrument_list[band_idx],
                         wave_estimator='max_wave', unit='mu')
 
                     ax_sed.errorbar(mean_band_wavelength, forced_photomerty_dict['src_flux'],
@@ -516,9 +524,13 @@ class PhotLab(ObsAccess):
                     #     cutout_size=img_cutout_size)
                     # mean_sigclip, median_sigclip, std_sigclip = sigma_clipped_stats(obs_cutout_dict['%s_img_cutout' % band].data)
                     # source detection
+
+                    sub_src_search_rad_pix = helper_func.CoordTools.transform_world2pix_scale(
+                length_in_arcsec=sub_src_search_rad_arcsec, wcs=obs_cutout_dict['%s_img_cutout' % band].wcs).value
+
                     sub_src_detect = phot_tools.SrcTools.detect_star_like_src(
                         data=obs_cutout_dict['%s_img_cutout' % band].data,
-                        detection_threshold=forced_photomerty_dict['bkg_median'],
+                        detection_threshold=forced_photomerty_dict['bkg_std'] * 10,
                         src_fwhm_pix=fwhm_pix_list[band_idx], min_separation=fwhm_pix_list[band_idx], roundhi=1,
                         roundlo=-1, sharphi=1.0, sharplo=0.2)
                     if sub_src_detect is None: continue
@@ -532,8 +544,10 @@ class PhotLab(ObsAccess):
                     sort = np.argsort(dist2center)
                     sub_src_detect = sub_src_detect[sort]
                     mask_src_in_apert = np.sqrt((sub_src_detect['xcentroid'] - central_coordx) ** 2 + (
-                            sub_src_detect['ycentroid'] - central_coordy) ** 2) < (
-                                                substructure_roi_frac * phot_aperture_pix_list[band_idx])
+                            sub_src_detect['ycentroid'] - central_coordy) ** 2) < sub_src_search_rad_pix
+
+
+                    print('N subsources ', sum(mask_src_in_apert))
 
                     if sum(mask_src_in_apert) > 0:
 
@@ -543,7 +557,7 @@ class PhotLab(ObsAccess):
                         dec_sub_src_list = coords_sub_src.dec.degree
 
                         native_rad_in_arcsec, native_rad_out_arcsec = phot_tools.ApertTools.get_standard_bkg_annulus_rad_arcsec(
-                            obs=obs_list[band_idx], band=band, wcs=wcs)
+                            obs=obs_list[band_idx], instrument=instrument_list[band_idx], band=band, wcs=obs_cutout_dict['%s_img_cutout' % band].wcs)
 
                         for sub_structure_idx, ra_sub_src, dec_sub_src, src_x, src_y in zip(
                                 range(len(ra_sub_src_list[mask_src_in_apert])), ra_sub_src_list[mask_src_in_apert],
@@ -689,11 +703,11 @@ class PhotLab(ObsAccess):
                     ObsTools.get_hst_instrument(target=self.phot_hst_target_name, band=band))
                 target_name_list.append(self.phot_hst_target_name)
             elif band in nircam_band_list:
-                obs_list.append('nircam')
+                obs_list.append('jwst')
                 instrument_list.append('nircam')
                 target_name_list.append(self.phot_nircam_target_name)
             elif band in miri_band_list:
-                obs_list.append('miri')
+                obs_list.append('jwst')
                 instrument_list.append('miri')
                 target_name_list.append(self.phot_miri_target_name)
             else:
@@ -708,17 +722,23 @@ class PhotLab(ObsAccess):
 
             # get standard photometry aperture
             phot_aperture_arcsec = phot_tools.ApertTools.get_standard_ap_rad_arcsec(obs=obs_list[-1],
-                                                                                    band=band, wcs=wcs)
+                                                                                    band=band, wcs=wcs,
+                                                                                    instrument=instrument_list[-1])
             # get aperture corr factor
             phot_apert_corr_fact = phot_tools.ApertTools.get_standard_ap_corr_fact(
-                obs=obs_list[-1], band=band, target=target_name_list[-1])
+                obs=obs_list[-1], band=band, target=target_name_list[-1], instrument=instrument_list[-1])
 
-            foreground_ext_mag = extinction_tools.ExtinctionTools.get_target_gal_ext_band(
-                target=helper_func.FileTools.target_name_no_directions(target=target_name_list[-1]), obs=obs_list[-1],
-                band=band)
+
+            foreground_ext_mag = DustTools.get_target_gal_ext_band(
+                    target=self.phot_target_name, band=band, obs=obs_list[-1],
+                    instrument=instrument_list[-1], ext_law='G23')
+
+            # foreground_ext_mag = extinction_tools.ExtinctionTools.get_target_gal_ext_band(
+            #     target=helper_func.FileTools.target_name_no_directions(target=target_name_list[-1]), obs=obs_list[-1],
+            #     band=band)
 
             rad_in_arcsec, rad_out_arcsec = phot_tools.ApertTools.get_standard_bkg_annulus_rad_arcsec(
-                obs=obs_list[-1], band=band, wcs=wcs)
+                obs=obs_list[-1], band=band, wcs=wcs, instrument=instrument_list[-1])
 
             phot_aperture_pix = helper_func.CoordTools.transform_world2pix_scale(
                 length_in_arcsec=phot_aperture_arcsec, wcs=wcs).value
@@ -946,7 +966,7 @@ class PhotLab(ObsAccess):
 
         # get all the aperture and background sizes needed
         (standard_phot_aperture_arcsec_list, phot_aperture_pix_list, phot_aperture_arcsec_list,
-         bkg_rad_in_arcsec_list, bkg_rad_out_arcsec_list, fwhm_pix_list, std_pix_list) = (
+         bkg_rad_in_arcsec_list, bkg_rad_out_arcsec_list, fwhm_pix_list, std_pix_list, fwhm_arcsec_list) = (
             self.get_aperture_radii_and_scales(band_list=band_list, instrument_list=instrument_list, obs_list=obs_list,
                                                roi_arcsec=roi_arcsec, bkg_roi_rad_in_arcsec=bkg_roi_rad_in_arcsec,
                                                bkg_roi_rad_out_arcsec=bkg_roi_rad_out_arcsec))
@@ -1369,6 +1389,8 @@ class PhotLab(ObsAccess):
                 astrosat_target_name=self.phot_astrosat_target_name,
                             nircam_data_ver=self.nircam_data_ver, miri_data_ver=self.miri_data_ver,
                 astrosat_data_ver=self.astrosat_data_ver,
+                nircam_program_id=self.nircam_program_id,
+                miri_program_id=self.miri_program_id,
                             include_hst=include_hst, include_nircam=include_nircam, include_miri=include_miri, include_astrosat=include_astrosat))
 
         # get recenter list
@@ -1395,7 +1417,7 @@ class PhotLab(ObsAccess):
 
         # get all the aperture and background sizes needed
         (standard_phot_aperture_arcsec_list, phot_aperture_pix_list, phot_aperture_arcsec_list,
-         bkg_rad_in_arcsec_list, bkg_rad_out_arcsec_list, fwhm_pix_list, std_pix_list) = (
+         bkg_rad_in_arcsec_list, bkg_rad_out_arcsec_list, fwhm_pix_list, std_pix_list, fwhm_arcsec_list) = (
             self.get_aperture_radii_and_scales(band_list=band_list, instrument_list=instrument_list, obs_list=obs_list,
                                                roi_arcsec=roi_arcsec, bkg_roi_rad_in_arcsec=bkg_roi_rad_in_arcsec,
                                                bkg_roi_rad_out_arcsec=bkg_roi_rad_out_arcsec))
@@ -1568,9 +1590,11 @@ class PhotLab(ObsAccess):
                 else:
                     original_instrument = instrument_list[band_idx]
 
-                fore_ground_ext = DustTools.get_target_gal_ext_band(
-                    target=self.phot_target_name, band=band, obs=obs_list[band_idx],
-                    instrument=original_instrument, ext_law='G23')
+                # get galactic reddening correction
+                sample_access = PhangsSampleAccess()
+                fore_ground_ext = sample_access.get_target_gal_ext_band(
+                    target=self.phot_target_name, obs=obs_list[band_idx], instrument=instrument_list[band_idx],
+                    band=band, ext_law='G23')
 
                 gal_red_corr_fact = 10 ** (fore_ground_ext / 2.5)
 
@@ -1924,7 +1948,7 @@ class PhotLab(ObsAccess):
 
         # get all the aperture and background sizes needed
         (standard_phot_aperture_arcsec_list, phot_aperture_pix_list, phot_aperture_arcsec_list,
-         bkg_rad_in_arcsec_list, bkg_rad_out_arcsec_list, fwhm_pix_list, std_pix_list) = (
+         bkg_rad_in_arcsec_list, bkg_rad_out_arcsec_list, fwhm_pix_list, std_pix_list, fwhm_arcsec_list) = (
             self.get_aperture_radii_and_scales(band_list=band_list, instrument_list=instrument_list, obs_list=obs_list,
                                                roi_arcsec=roi_arcsec, bkg_roi_rad_in_arcsec=bkg_roi_rad_in_arcsec,
                                                bkg_roi_rad_out_arcsec=bkg_roi_rad_out_arcsec))
@@ -1934,6 +1958,7 @@ class PhotLab(ObsAccess):
         for band in band_list:
             flux_table_names.append('%s_flux' % band)
             flux_table_names.append('%s_flux_err' % band)
+            flux_table_names.append('%s_mean_sig_arcsec' % band)
             flux_table_names.append('%s_apert_corr_fact' % band)
             flux_table_names.append('%s_apert_gal_ext_fact' % band)
             flux_table_names.append('%s_flux_bkg_sub_no_corr' % band)
@@ -1945,7 +1970,7 @@ class PhotLab(ObsAccess):
             flux_table_names.append('%s_bkg_flag' % band)
         # construct a table
         r_rows = len(idx_list)
-        n_cols = len(band_list) * 11
+        n_cols = len(band_list) * 12
         flux_table = Table(np.zeros((r_rows, n_cols)), names=flux_table_names)
 
         #################################
@@ -2059,10 +2084,12 @@ class PhotLab(ObsAccess):
 
                 else:
                     corr_fact = None
+                    mean_sig_arcsec = None
 
                 # get galactic reddening correction
-                fore_ground_ext = DustTools.get_target_gal_ext_band(
-                    target=self.phot_target_name, obs=obs_list[band_idx], band=band, ext_law='G23')
+                sample_access = PhangsSampleAccess()
+                fore_ground_ext = sample_access.get_target_gal_ext_band(
+                    target=self.phot_target_name, obs=obs_list[band_idx], instrument=instrument_list[band_idx], band=band, ext_law='G23')
 
                 gal_red_corr_fact = 10 ** (fore_ground_ext / 2.5)
 
@@ -2203,14 +2230,14 @@ class PhotLab(ObsAccess):
                         idx_row += 3
 
                     # plot sed point
-                    mean_band_wavelength = ObsTools.get_phangs_telescope_wave(
-                        target=target_name_list[band_idx], band=band, telescope=obs_list[band_idx],
+                    mean_band_wavelength = ObsTools.get_obs_wave(
+                        target=target_name_list[band_idx], band=band, obs=obs_list[band_idx], instrument=instrument_list[band_idx],
                         wave_estimator='mean_wave', unit='mu')
-                    min_band_wavelength = ObsTools.get_phangs_telescope_wave(
-                        target=target_name_list[band_idx], band=band, telescope=obs_list[band_idx],
+                    min_band_wavelength = ObsTools.get_obs_wave(
+                        target=target_name_list[band_idx], band=band, obs=obs_list[band_idx], instrument=instrument_list[band_idx],
                         wave_estimator='min_wave', unit='mu')
-                    max_band_wavelength = ObsTools.get_phangs_telescope_wave(
-                        target=target_name_list[band_idx], band=band, telescope=obs_list[band_idx],
+                    max_band_wavelength = ObsTools.get_obs_wave(
+                        target=target_name_list[band_idx], band=band, obs=obs_list[band_idx], instrument=instrument_list[band_idx],
                         wave_estimator='max_wave', unit='mu')
 
                     # plot SED point only when there is a detection
@@ -2255,6 +2282,8 @@ class PhotLab(ObsAccess):
                     flux_table['%s_flux' % band][running_idx] = forced_photomerty_dict['src_flux_err']
                     flux_table['%s_flux_err' % band][running_idx] = forced_photomerty_dict['src_flux_err']
                 # the aperture corr factors
+
+                flux_table['%s_mean_sig_arcsec' % band][running_idx] = mean_sig_arcsec
                 flux_table['%s_apert_corr_fact' % band][running_idx] = corr_fact
                 flux_table['%s_apert_gal_ext_fact' % band][running_idx] = gal_red_corr_fact
                 # uncorrected fluxes
@@ -2300,6 +2329,30 @@ class PhotLab(ObsAccess):
                 plt.close(fig)
 
         return flux_table
+
+
+
+
+
+
+
+
+
+
+
+    def compute_ci(self, ra, dec, band, obs, rad_1_pix=1, rad_2_pix=3
+                   ):
+
+        img = getattr(self,'%s_bands_data' % obs)['%s_data_img' % band]
+        wcs = getattr(self,'%s_bands_data' % obs)['%s_wcs_img' % band]
+
+        rad_1_arcsec = helper_func.CoordTools.transform_pix2world_scale(length_in_pix=rad_1_pix, wcs=wcs)
+        rad_2_arcsec = helper_func.CoordTools.transform_pix2world_scale(length_in_pix=rad_2_pix, wcs=wcs)
+
+        return phot_tools.ApertTools.compute_annulus_ci(img=img,
+                                                 img_err=None, wcs=wcs,
+            ra=ra, dec=dec, rad_1_arcsec=rad_1_arcsec, rad_2_arcsec=rad_2_arcsec)
+
 
 
 
